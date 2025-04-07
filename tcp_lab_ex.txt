@@ -1,0 +1,1061 @@
+TCP header:
+
+#ifndef HEADER_H
+#define HEADER_H
+
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <arpa/inet.h>
+#include <time.h>
+
+#define BUFFER_SIZE 1024
+#define SERVER_PORT 5000
+#define PRINT_FORMAT(string1, string2) printf("%-15s\t-|-\t%-15s\n", string1, string2)
+
+#endif
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+
+1. TCP - data transmission with odd parity
+
+client code:
+
+#include "header.h"
+
+void add_odd_parity(char* binary_data) {
+    int length = strlen(binary_data);
+    int count_ones = 0;
+
+    for (int i = 0; i < length; i++) {
+        if (binary_data[i] == '1') {
+            count_ones++;
+        }
+    }
+
+    if (count_ones % 2 == 0) {
+        binary_data[length] = '1';
+    } else {
+        binary_data[length] = '0';
+    }
+
+    binary_data[length + 1] = '\0';
+}
+
+void number_to_binary(int number, char* binary_string) {
+    int index = 0;
+    while (number > 0) {
+        binary_string[index++] = (number % 2) + '0';
+        number /= 2;
+    }
+    binary_string[index] = '\0';
+
+    int left = 0, right = index - 1;
+    while (left < right) {
+        char temp = binary_string[left];
+        binary_string[left] = binary_string[right];
+        binary_string[right] = temp;
+        left++;
+        right--;
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 2) {
+        printf("Usage: %s <server_ip>\n", argv[0]);
+        return 1;
+    }
+
+    int client_socket;
+    struct sockaddr_in server_address;
+    char buffer[BUFFER_SIZE] = {0};
+
+    if ((client_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    memset(&server_address, '0', sizeof(server_address));
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(SERVER_PORT);
+
+    if (inet_pton(AF_INET, argv[1], &server_address.sin_addr) <= 0) {
+        perror("Invalid address or address not supported");
+        return 1;
+    }
+
+    if (connect(client_socket, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
+        perror("Connection failed");
+        return 1;
+    }
+
+    int input_number;
+    printf("Enter a number: ");
+    scanf("%d", &input_number);
+
+    number_to_binary(input_number, buffer);
+    add_odd_parity(buffer);
+
+    if (write(client_socket, buffer, strlen(buffer)) > 0) {
+        PRINT_FORMAT("[Sent]", buffer);
+    } else {
+        perror("Write failed");
+    }
+
+    memset(buffer, 0, BUFFER_SIZE);
+    if (read(client_socket, buffer, BUFFER_SIZE) > 0) {
+        PRINT_FORMAT("[Received]", buffer);
+    } else {
+        perror("Read failed");
+    }
+
+    close(client_socket);
+    return 0;
+}
+
+server code:
+
+#include "header.h"
+
+void check_odd_parity(char* codeword) {
+    int length = strlen(codeword);
+    int count_ones = 0;
+
+    for (int i = 0; i < length - 1; i++) {
+        if (codeword[i] == '1') {
+            count_ones++;
+        }
+    }
+
+    if ((count_ones % 2) == (codeword[length - 1] - '0')) {
+        strcpy(codeword, "-VE ACK");
+    } else {
+        strcpy(codeword, "+VE ACK");
+    }
+}
+
+int main() {
+    int server_socket, client_socket;
+    struct sockaddr_in server_address;
+    char buffer[BUFFER_SIZE] = {0};
+
+    if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    memset(&server_address, '0', sizeof(server_address));
+    server_address.sin_family = AF_INET;
+    server_address.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_address.sin_port = htons(SERVER_PORT);
+
+    if (bind(server_socket, (struct sockaddr*)&server_address, sizeof(server_address)) < 0) {
+        perror("Bind failed");
+        return 1;
+    }
+
+    if (listen(server_socket, 10) < 0) {
+        perror("Listen failed");
+        return 1;
+    }
+
+    printf("Server started listening on port %d...\n\n", SERVER_PORT);
+
+    while (1) {
+        if ((client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL)) < 0) {
+            perror("Accept failed");
+            continue;
+        }
+
+        memset(buffer, 0, BUFFER_SIZE);
+        if (read(client_socket, buffer, BUFFER_SIZE) > 0) {
+            PRINT_FORMAT("[Received]", buffer);
+            check_odd_parity(buffer);
+
+            if (write(client_socket, buffer, strlen(buffer)) > 0) {
+                PRINT_FORMAT("[Sent]", buffer);
+            } else {
+                perror("Write failed");
+            }
+        } else {
+            perror("Read failed");
+        }
+
+        close(client_socket);
+    }
+
+    close(server_socket);
+    return 0;
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+2. TCP - data transmission with checksum verification
+
+client code:
+
+#include "header.h"
+
+char encodedData[DATA_LENGTH + 1][9];
+
+void flipBits(char* checksum) {
+    for (int i = 0; i < 8; i++) {
+        if (checksum[i] == '1') checksum[i] = '0';
+        else checksum[i] = '1';
+    }
+}
+
+void intToBinary(int num, char* binaryStr) {
+    for (int i = 7; i >= 0; i--) {
+        binaryStr[i] = (num & 1) + '0';
+        num >>= 1;
+    }
+    binaryStr[8] = '\0';
+}
+
+int main(int argc, char* argv[]) {
+    for (int i = 0; i < DATA_LENGTH + 1; i++) {
+        memset(encodedData[i], '0', sizeof(encodedData[i]));
+    }
+
+    int clientSocket = 0;
+    struct sockaddr_in serverAddr;
+
+    if (argc != 2) {
+        printf("Usage: %s <server_ip>\n", argv[0]);
+        return 1;
+    }
+
+    if ((clientSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    memset(&serverAddr, '0', sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(SERVER_PORT);
+
+    if (inet_pton(AF_INET, argv[1], &serverAddr.sin_addr) <= 0) {
+        perror("Invalid address");
+        return 1;
+    }
+
+    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Connection failed");
+        return 1;
+    }
+
+    int totalSum = 0;
+
+    for (int i = 0; i < DATA_LENGTH; i++) {
+        int inputNum = 0;
+        printf("Enter dataword %d: ", i + 1);
+        scanf("%d", &inputNum);
+        intToBinary(inputNum, encodedData[i]);
+        totalSum += inputNum;
+    }
+
+    intToBinary(totalSum, encodedData[DATA_LENGTH]);
+    flipBits(encodedData[DATA_LENGTH]);
+
+    for (int i = 0; i < DATA_LENGTH + 1; i++) {
+        if (write(clientSocket, encodedData[i], strlen(encodedData[i])) > 0) {
+            PRINT_FORMAT("[Sent]", encodedData[i]);
+        } else {
+            perror("Write failed");
+        }
+    }
+
+    char ackBuffer[BUFFER_SIZE] = {0};
+
+    if (read(clientSocket, ackBuffer, BUFFER_SIZE) > 0) {
+        PRINT_FORMAT("[Received]", ackBuffer);
+    } else {
+        perror("Read failed");
+    }
+
+    close(clientSocket);
+    return 0;
+}
+
+server code:
+
+#include "header.h"
+
+char encodedData[DATA_LENGTH + 1][9];
+
+int binaryToInt(char* binaryStr) {
+    int num = 0;
+    for (int i = 0; i < 8; i++) {
+        num = (num << 1) + (binaryStr[i] - '0');
+    }
+    return num;
+}
+
+int verifyChecksum(char data[][9]) {
+    int total = 0;
+    for (int i = 0; i < DATA_LENGTH + 1; i++) {
+        total += binaryToInt(data[i]);
+    }
+    return (total & 0xFF) == 0;
+}
+
+int main() {
+    for (int i = 0; i < DATA_LENGTH + 1; i++) {
+        memset(encodedData[i], '0', sizeof(encodedData[i]));
+    }
+
+    int serverSocket = 0, clientSocket = 0;
+    struct sockaddr_in serverAddr;
+
+    if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    memset(&serverAddr, '0', sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddr.sin_port = htons(SERVER_PORT);
+
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Bind failed");
+        return 1;
+    }
+
+    if (listen(serverSocket, 10) < 0) {
+        perror("Listen failed");
+        return 1;
+    }
+
+    printf("Server started listening on port %d...\n\n", SERVER_PORT);
+
+    while (1) {
+        if ((clientSocket = accept(serverSocket, (struct sockaddr*)NULL, NULL)) < 0) {
+            perror("Accept failed");
+            continue;
+        }
+
+        for (int i = 0; i < DATA_LENGTH + 1; i++) {
+            if (read(clientSocket, encodedData[i], sizeof(encodedData[0]) - 1) > 0) {
+                encodedData[i][sizeof(encodedData[0]) - 1] = '\0';
+                PRINT_FORMAT("[Received]", encodedData[i]);
+            } else {
+                perror("Read failed");
+            }
+        }
+
+        char ackBuffer[BUFFER_SIZE] = {0};
+
+        if (verifyChecksum(encodedData)) {
+            strcpy(ackBuffer, "+VE");
+        } else {
+            strcpy(ackBuffer, "-VE");
+        }
+
+        if (write(clientSocket, ackBuffer, strlen(ackBuffer)) > 0) {
+            PRINT_FORMAT("[Sent]", ackBuffer);
+        } else {
+            perror("Write failed");
+        }
+
+        close(clientSocket);
+    }
+
+    close(serverSocket);
+    return 0;
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+
+3. TCP - Caesar Cipher + reversal
+
+client code:
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h>
+
+#include "header.h"
+
+#define PORT 56750
+
+// Encrypts the message using Caesar Cipher
+void encryptCaesar(char *message, int shift) {
+    for (int i = 0; message[i] != '\0'; i++) {
+        if (message[i] >= 'A' && message[i] <= 'Z') {
+            message[i] = (message[i] - 'A' + shift) % 26 + 'A';
+        } else if (message[i] >= 'a' && message[i] <= 'z') {
+            message[i] = (message[i] - 'a' + shift) % 26 + 'a';
+        }
+    }
+}
+
+int main(int argc, char *argv[]) {
+    int sockfd = 0, n = 0;
+    char recvBuff[1024];
+    struct sockaddr_in serv_addr;
+
+    if (argc != 2) {
+        printf("\n Usage: %s <ip of server> \n", argv[0]);
+        return 1;
+    }
+
+    memset(recvBuff, '0', sizeof(recvBuff));
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);  // Create socket
+
+    memset(&serv_addr, '0', sizeof(serv_addr));
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
+
+    if (inet_pton(AF_INET, argv[1], &serv_addr.sin_addr) <= 0) {
+        printf("\n Invalid address or address not supported \n");
+        return 1;
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("\n Connection failed \n");
+        return 1;
+    }
+
+    char message[1024];
+    int shift;
+
+    printf("Enter message to encrypt: ");
+    fgets(message, sizeof(message), stdin);
+    message[strcspn(message, "\n")] = 0;  // Remove newline
+
+    printf("Enter shift value: ");
+    scanf("%d", &shift);
+
+    encryptCaesar(message, shift);  // Encrypt the message
+    printf("Encrypted message: %s\n", message);
+
+    // Send shift value first
+    write(sockfd, &shift, sizeof(shift));
+
+    // Send encrypted message
+    write(sockfd, message, strlen(message));
+
+    // Receive reversed decrypted message
+    n = read(sockfd, recvBuff, sizeof(recvBuff) - 1);
+    recvBuff[n] = 0;
+    printf("Reversed decrypted message from server: %s\n", recvBuff);
+
+    close(sockfd);
+    return 0;
+}
+
+server code:
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h> 
+
+#include "header.h"
+
+#define PORT 56750
+
+// Decrypts the message using Caesar Cipher
+void decryptCaesar(char *message, int shift) {
+    for (int i = 0; message[i] != '\0'; i++) {
+        if (message[i] >= 'A' && message[i] <= 'Z') {
+            message[i] = (message[i] - 'A' - shift + 26) % 26 + 'A';
+        } else if (message[i] >= 'a' && message[i] <= 'z') {
+            message[i] = (message[i] - 'a' - shift + 26) % 26 + 'a';
+        }
+    }
+}
+
+// Reverses the string
+void reverseString(char *str) {
+    int len = strlen(str);
+    for (int i = 0; i < len / 2; i++) {
+        char temp = str[i];
+        str[i] = str[len - i - 1];
+        str[len - i - 1] = temp;
+    }
+}
+
+int main(int argc, char *argv[]) {
+    int listenfd = 0, connfd = 0;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    char client_ip[INET_ADDRSTRLEN];
+    char recvBuff[1024];
+
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);  // Create socket
+
+    memset(&server_addr, '0', sizeof(server_addr));
+    memset(recvBuff, '0', sizeof(recvBuff));
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(PORT);
+
+    bind(listenfd, (struct sockaddr *)&server_addr, sizeof(server_addr));  // Bind socket
+
+    listen(listenfd, 10);  // Listen for connections
+
+    while (1) {
+        connfd = accept(listenfd, (struct sockaddr *)&client_addr, &addr_len);  // Accept connection
+
+        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+        printf("Client connected from IP: %s, Port: %d\n", client_ip, ntohs(client_addr.sin_port));
+
+        int shift;
+        read(connfd, &shift, sizeof(shift));  // Receive shift value
+
+        int n = read(connfd, recvBuff, sizeof(recvBuff) - 1);  // Receive encrypted message
+        recvBuff[n] = 0;
+        printf("Received encrypted message: %s\n", recvBuff);
+
+        decryptCaesar(recvBuff, shift);  // Decrypt the message
+        printf("Decrypted message: %s\n", recvBuff);
+
+        reverseString(recvBuff);  // Reverse the decrypted message
+        printf("Reversed decrypted message: %s\n", recvBuff);
+
+        write(connfd, recvBuff, strlen(recvBuff));  // Send reversed message back
+
+        close(connfd);  // Close connection
+    }
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+4. TCP - IP address to bin, octal, hexa
+
+client code:
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h> 
+
+#include "header.h"
+
+#define PORT 56750
+
+int main(int argc, char *argv[]) {
+    int sockfd = 0, n = 0;
+    char recvBuff[1024];
+    struct sockaddr_in serv_addr;
+
+    if (argc != 2) {
+        printf("\n Usage: %s <ip of server> \n", argv[0]);
+        return 1;
+    }
+
+    memset(recvBuff, '0', sizeof(recvBuff));
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);  // Create socket
+
+    memset(&serv_addr, '0', sizeof(serv_addr));
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
+
+    if (inet_pton(AF_INET, argv[1], &serv_addr.sin_addr) <= 0) {
+        printf("\n Invalid address or address not supported \n");
+        return 1;
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("\n Connection failed \n");
+        return 1;
+    }
+
+    char ipAddress[16];
+    printf("Enter IP address in dotted decimal notation: ");
+    scanf("%s", ipAddress);
+
+    write(sockfd, ipAddress, strlen(ipAddress));  // Send IP address to server
+
+    n = read(sockfd, recvBuff, sizeof(recvBuff) - 1);  // Receive converted representations
+    recvBuff[n] = 0;
+    printf("Converted representations from server:\n%s\n", recvBuff);
+
+    close(sockfd);
+    return 0;
+}
+
+server code:
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h> 
+
+#include "header.h"
+
+#define PORT 56750
+
+// Function to convert an integer to binary string
+void intToBinary(int num, char *binary) {
+    for (int i = 7; i >= 0; i--) {
+        binary[7 - i] = ((num >> i) & 1) ? '1' : '0';
+    }
+    binary[8] = '\0';
+}
+
+// Function to convert IP address to binary, octal, and hexadecimal
+void convertIP(char *ip, char *binary, char *octal, char *hex) {
+    unsigned int bytes[4];
+    sscanf(ip, "%u.%u.%u.%u", &bytes[0], &bytes[1], &bytes[2], &bytes[3]);
+
+    char temp[9];
+    binary[0] = '\0';
+    octal[0] = '\0';
+    hex[0] = '\0';
+
+    for (int i = 0; i < 4; i++) {
+        // Binary
+        intToBinary(bytes[i], temp);
+        strcat(binary, temp);
+        strcat(binary, " ");
+
+        // Octal
+        char oct[4];
+        sprintf(oct, "%o", bytes[i]);
+        strcat(octal, oct);
+
+        // Hexadecimal
+        char hx[3];
+        sprintf(hx, "%02X", bytes[i]);
+        strcat(hex, hx);
+    }
+}
+
+int main(int argc, char *argv[]) {
+    int listenfd = 0, connfd = 0;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    char client_ip[INET_ADDRSTRLEN];
+    char recvBuff[1024];
+
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);  // Create socket
+
+    memset(&server_addr, '0', sizeof(server_addr));
+    memset(recvBuff, '0', sizeof(recvBuff));
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(PORT);
+
+    bind(listenfd, (struct sockaddr *)&server_addr, sizeof(server_addr));  // Bind socket
+
+    listen(listenfd, 10);  // Listen for connections
+
+    while (1) {
+        connfd = accept(listenfd, (struct sockaddr *)&client_addr, &addr_len);  // Accept connection
+
+        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+        printf("Client connected from IP: %s, Port: %d\n", client_ip, ntohs(client_addr.sin_port));
+
+        int n = read(connfd, recvBuff, sizeof(recvBuff) - 1);  // Receive IP address
+        recvBuff[n] = 0;
+        printf("Received IP address: %s\n", recvBuff);
+
+        char binary[64], octal[32], hex[32];
+        convertIP(recvBuff, binary, octal, hex);  // Convert IP address
+
+        char result[256];
+        sprintf(result, "Binary: %s\nOctal: %s\nHexadecimal: %s\n", binary, octal, hex);
+
+        write(connfd, result, strlen(result));  // Send converted representations back
+
+        close(connfd);  // Close connection
+    }
+}
+
+-----------------------------------------------------------------------------------------------------------------------------------
+
+5. TCP - validate IP address
+
+client code:
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h> 
+
+#include "header.h"
+
+#define PORT 56750
+
+int main(int argc, char *argv[]) {
+    int sockfd = 0, n = 0;
+    char recvBuff[1024];
+    struct sockaddr_in serv_addr;
+
+    if (argc != 2) {
+        printf("\n Usage: %s <ip of server> \n", argv[0]);
+        return 1;
+    }
+
+    memset(recvBuff, '0', sizeof(recvBuff));
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);  // Create socket
+
+    memset(&serv_addr, '0', sizeof(serv_addr));
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
+
+    if (inet_pton(AF_INET, argv[1], &serv_addr.sin_addr) <= 0) {
+        printf("\n Invalid address or address not supported \n");
+        return 1;
+    }
+
+    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        printf("\n Connection failed \n");
+        return 1;
+    }
+
+    char ipAddress[16];
+    printf("Enter IP address in dotted decimal notation: ");
+    scanf("%s", ipAddress);
+
+    write(sockfd, ipAddress, strlen(ipAddress));  // Send IP address to server
+
+    n = read(sockfd, recvBuff, sizeof(recvBuff) - 1);  // Receive validation result
+    recvBuff[n] = 0;
+    printf("Validation result from server: %s\n", recvBuff);
+
+    close(sockfd);
+    return 0;
+}
+
+server code:
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/types.h>
+#include <time.h> 
+
+#include "header.h"
+
+#define PORT 56750
+
+// Function to validate the IP address based on Classful Network Architecture
+int validateIP(char *ip) {
+    unsigned int bytes[4];
+    if (sscanf(ip, "%u.%u.%u.%u", &bytes[0], &bytes[1], &bytes[2], &bytes[3]) != 4) {
+        return 0;  // Invalid format
+    }
+
+    for (int i = 0; i < 4; i++) {
+        if (bytes[i] > 255) {
+            return 0;  // Invalid byte value
+        }
+    }
+
+    // Check IP class and range
+    if (bytes[0] >= 0 && bytes[0] <= 127) {
+        // Class A
+        return 1;
+    } else if (bytes[0] >= 128 && bytes[0] <= 191) {
+        // Class B
+        return 1;
+    } else if (bytes[0] >= 192 && bytes[0] <= 223) {
+        // Class C
+        return 1;
+    } else if (bytes[0] >= 224 && bytes[0] <= 239) {
+        // Class D (Multicast)
+        return 1;
+    } else if (bytes[0] >= 240 && bytes[0] <= 255) {
+        // Class E (Reserved)
+        return 1;
+    }
+
+    return 0;  // Invalid range
+}
+
+int main(int argc, char *argv[]) {
+    int listenfd = 0, connfd = 0;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    char client_ip[INET_ADDRSTRLEN];
+    char recvBuff[1024];
+
+    listenfd = socket(AF_INET, SOCK_STREAM, 0);  // Create socket
+
+    memset(&server_addr, '0', sizeof(server_addr));
+    memset(recvBuff, '0', sizeof(recvBuff));
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    server_addr.sin_port = htons(PORT);
+
+    bind(listenfd, (struct sockaddr *)&server_addr, sizeof(server_addr));  // Bind socket
+
+    listen(listenfd, 10);  // Listen for connections
+
+    while (1) {
+        connfd = accept(listenfd, (struct sockaddr *)&client_addr, &addr_len);  // Accept connection
+
+        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, INET_ADDRSTRLEN);
+        printf("Client connected from IP: %s, Port: %d\n", client_ip, ntohs(client_addr.sin_port));
+
+        int n = read(connfd, recvBuff, sizeof(recvBuff) - 1);  // Receive IP address
+        recvBuff[n] = 0;
+        printf("Received IP address: %s\n", recvBuff);
+
+        // Validate the IP address
+        if (validateIP(recvBuff)) {
+            write(connfd, "VALID", 5);  // Send "VALID" to client
+        } else {
+            write(connfd, "INVALID", 7);  // Send "INVALID" to client
+        }
+
+        close(connfd);  // Close connection
+    }
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+
+6. TCP - data transmissions + CRC
+
+client code:
+
+#include "header.h"
+
+#define POLY 0x11021  // CRC-16-CCITT-FALSE polynomial
+
+unsigned short calculateCRC(char* data, int length) {
+    unsigned short crc = 0xFFFF;  // Initial CRC value
+    for (int i = 0; i < length; i++) {
+        crc ^= (data[i] << 8);  // XOR byte into the CRC
+        for (int j = 0; j < 8; j++) {  // Process 8 bits
+            if (crc & 0x8000) {  // If the highest bit is set
+                crc = (crc << 1) ^ POLY;  // Shift left and XOR with polynomial
+            } else {
+                crc <<= 1;  // Just shift left if no XOR needed
+            }
+        }
+    }
+    return crc;  // Final CRC value
+}
+
+void intToBinary(int num, char* binaryStr) {
+    for (int i = 7; i >= 0; i--) {
+        binaryStr[i] = (num & 1) + '0';
+        num >>= 1;
+    }
+    binaryStr[8] = '\0';
+}
+
+int main(int argc, char* argv[]) {
+    char dataBuffer[BUFFER_SIZE] = {0};
+
+    int clientSocket = 0;
+    struct sockaddr_in serverAddr;
+
+    if (argc != 2) {
+        printf("Usage: %s <server_ip>\n", argv[0]);
+        return 1;
+    }
+
+    if ((clientSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    memset(&serverAddr, '0', sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(SERVER_PORT);
+
+    if (inet_pton(AF_INET, argv[1], &serverAddr.sin_addr) <= 0) {
+        perror("Invalid address");
+        return 1;
+    }
+
+    if (connect(clientSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Connection failed");
+        return 1;
+    }
+
+    int totalSum = 0;
+    char encodedData[DATA_LENGTH + 1][9];
+
+    for (int i = 0; i < DATA_LENGTH; i++) {
+        int inputNum = 0;
+        printf("Enter dataword %d: ", i + 1);
+        scanf("%d", &inputNum);
+        intToBinary(inputNum, encodedData[i]);
+        totalSum += inputNum;
+    }
+
+    // Convert the data into binary representation
+    for (int i = 0; i < DATA_LENGTH + 1; i++) {
+        if (i == DATA_LENGTH) {
+            // Calculate CRC for the whole data (data and checksum)
+            unsigned short crc = calculateCRC((char*)encodedData, DATA_LENGTH * 8);
+            intToBinary(crc, encodedData[i]);
+        }
+    }
+
+    // Send encoded data with CRC
+    for (int i = 0; i < DATA_LENGTH + 1; i++) {
+        if (write(clientSocket, encodedData[i], strlen(encodedData[i])) > 0) {
+            PRINT_FORMAT("[Sent]", encodedData[i]);
+        } else {
+            perror("Write failed");
+        }
+    }
+
+    char ackBuffer[BUFFER_SIZE] = {0};
+
+    if (read(clientSocket, ackBuffer, BUFFER_SIZE) > 0) {
+        PRINT_FORMAT("[Received]", ackBuffer);
+    } else {
+        perror("Read failed");
+    }
+
+    close(clientSocket);
+    return 0;
+}
+
+server code:
+
+#include "header.h"
+
+#define POLY 0x11021  // CRC-16-CCITT-FALSE polynomial
+
+unsigned short calculateCRC(char* data, int length) {
+    unsigned short crc = 0xFFFF;  // Initial CRC value
+    for (int i = 0; i < length; i++) {
+        crc ^= (data[i] << 8);  // XOR byte into the CRC
+        for (int j = 0; j < 8; j++) {  // Process 8 bits
+            if (crc & 0x8000) {  // If the highest bit is set
+                crc = (crc << 1) ^ POLY;  // Shift left and XOR with polynomial
+            } else {
+                crc <<= 1;  // Just shift left if no XOR needed
+            }
+        }
+    }
+    return crc;  // Final CRC value
+}
+
+int verifyCRC(char* data, int length, unsigned short receivedCRC) {
+    unsigned short crc = calculateCRC(data, length);
+    return crc == receivedCRC;  // Compare computed CRC with received CRC
+}
+
+int main() {
+    int serverSocket = 0, clientSocket = 0;
+    struct sockaddr_in serverAddr;
+
+    if ((serverSocket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    memset(&serverAddr, '0', sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serverAddr.sin_port = htons(SERVER_PORT);
+
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Bind failed");
+        return 1;
+    }
+
+    if (listen(serverSocket, 10) < 0) {
+        perror("Listen failed");
+        return 1;
+    }
+
+    printf("Server started listening on port %d...\n\n", SERVER_PORT);
+
+    while (1) {
+        if ((clientSocket = accept(serverSocket, (struct sockaddr*)NULL, NULL)) < 0) {
+            perror("Accept failed");
+            continue;
+        }
+
+        char receivedData[BUFFER_SIZE] = {0};
+        int receivedLen = 0;
+
+        // Receive the data and compute the CRC
+        unsigned short receivedCRC = 0;
+        for (int i = 0; i < DATA_LENGTH; i++) {
+            if (read(clientSocket, receivedData + receivedLen, sizeof(receivedData) - receivedLen) > 0) {
+                receivedLen += sizeof(receivedData[i]);
+            } else {
+                perror("Read failed");
+            }
+        }
+
+        // Get the CRC from the received data
+        unsigned short receivedCRC = *((unsigned short*)(&receivedData[receivedLen - 2]));
+
+        // Verify the CRC
+        if (verifyCRC(receivedData, receivedLen - 2, receivedCRC)) {
+            strcpy(receivedData, "+VE");
+        } else {
+            strcpy(receivedData, "-VE");
+        }
+
+        // Send acknowledgment back
+        if (write(clientSocket, receivedData, strlen(receivedData)) > 0) {
+            PRINT_FORMAT("[Sent]", receivedData);
+        } else {
+            perror("Write failed");
+        }
+
+        close(clientSocket);
+    }
+
+    close(serverSocket);
+    return 0;
+}
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------

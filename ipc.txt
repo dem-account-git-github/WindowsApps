@@ -1,0 +1,1178 @@
+Pipes:
+
+header.h:
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <fcntl.h>
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+1. simple communication via PIPEs
+
+#include "D:\network-core\header.h"
+
+// child writes to the pipe, an integer and parent reads and does some processing with it (prints it)
+
+int main()
+{
+    // define the array of file descriptors for the pipe
+    // fd[0] - read end
+    // fd[1] - write end
+    int fd[2];
+    
+    // create/open the pipe
+    if (pipe(fd) == -1)
+    {
+        printf("An error occured with opening the pipe\n");
+        return 1;
+    }
+    
+    // create another process (child process)
+    int id = fork();
+    
+    if (id == -1)
+    {
+        printf("Could not fork a child process\n");
+        return 2;
+    }
+    
+    // in child process
+    if (id == 0)
+    {
+        close(fd[0]);
+        int x;
+        printf("Input a number - ");
+        scanf("%d", &x);
+        if (write(fd[1], &x, sizeof(int)) == -1)
+        {
+            printf("An error occured while writing to the pipe\n");
+            return 3;
+        }
+        close(fd[1]);
+    }
+    
+    // in parent process
+    else
+    {
+        close(fd[1]);
+        int y;
+        if (read(fd[0], &y, sizeof(int)) == -1)
+        {
+            printf("An error occured while reading from the pipe\n");
+            return 4;
+        }
+        close(fd[0]);
+        printf("Got from child process - %d\n", y);
+    }
+    
+    return 0;
+}
+
+-----------------------------------------------------------------------------------------------------------------------------
+
+2. sum array using PIPEs
+
+#include "D:\network-core\header.h"
+
+// you have an array of elements and you gotta sum up all the elements using pipes
+// one of the process sums up one half of the array and the other process sums up the other half
+// one of the half sums is sent (written) onto the pipe and the receiving end sums it up with the other half sum
+// and the total final sum is finally displayed
+
+int main()
+{
+    // define the array
+    int arr[] = {1, 2, 3, 4, 1, 2};
+    int arrSize = sizeof(arr)/sizeof(arr[0]);
+    
+    // indices for start and end of the array for each process to compute sum
+    int start, end;
+    
+    // define the array of file descriptors for the pipe
+    // fd[0] - read end
+    // fd[1] - write end
+    int fd[2];
+    
+    // create/open the pipe
+    if (pipe(fd) == -1)
+    {
+        printf("An error occured with opening the pipe\n");
+        return 1;
+    }
+    
+    // create another process (child process)
+    int id = fork();
+    
+    if (id == -1)
+    {
+        printf("Could not fork a child process\n");
+        return 2;
+    }
+    
+    // in child process
+    if (id == 0)
+    {
+        start = 0;
+        end = arrSize/2;
+    }
+    
+    // in parent process
+    else
+    {
+        start = arrSize/2;
+        end = arrSize;
+    }
+    
+    // calculate the sum or every processes
+    int sum = 0;
+    for (int i = start; i < end; i++)
+        sum += arr[i];
+        
+    printf("Calculated partial sum - %d\n", sum);
+    
+    // if in child process, send the partial sum to the parent process
+    if (id == 0)
+    {
+        close(fd[0]);
+        if (write(fd[1], &sum, sizeof(sum)) == -1)
+        {
+            printf("An error occured while writing into the pipe\n");
+            return 3;
+        }
+        close(fd[1]);
+    }
+    
+    // else in parent process, get the partial sum from the child...sum it with your partial sum and return final sum
+    else
+    {
+        close(fd[1]);
+        int partialSumFromChild;
+        if (read(fd[0], &partialSumFromChild, sizeof(partialSumFromChild)) == -1)
+        {
+            printf("An error occured while reading from the pipe\n");
+            return 4;
+        }
+        close(fd[0]);
+        
+        int totalSum = sum + partialSumFromChild;
+        
+        printf("Total sum computed by parent is - %d", totalSum);
+        wait(NULL); // wait for child process to finish execution
+    }
+    
+    return 0;
+}
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+3. dual PIPEs factorial
+
+#include "D:\network-core\header-pipes.h"
+
+// parent sends 5...child gets 5...calculates factorial and returns back to parent. (create two pipes)
+
+int main()
+{
+    // set the number 5
+    int number = 5;
+    
+    // define the array of file descriptors for the pipe
+    // fd[0] - read end
+    // fd[1] - write end
+    int fdOne[2];
+    int fdSecond[2];
+    
+    // create/open the pipe fdOne
+    if (pipe(fdOne) == -1)
+    {
+        printf("An error occured while opening the pipe fdOne\n");
+        return 1;
+    }
+    
+    // create/open the pipe fdSecond
+    if (pipe(fdSecond) == -1)
+    {
+        printf("An error orrcured while opening the pipe fdSecond\n");
+        return 2;
+    }
+    
+    // create another process (child process)
+    int id = fork();
+    
+    if (id == -1)
+    {
+        printf("Could not fork a child process\n");
+        return 3;
+    }
+    
+    // in child process (child reads from parent via fdOne and writes the factorial to fdSecond)
+    if (id == 0)
+    {
+        close(fdOne[1]);
+        close(fdSecond[0]);
+        int recvNumber;
+        
+        if (read(fdOne[0], &recvNumber, sizeof(recvNumber)) == -1)
+        {
+            printf("An error occured while reading from the pipe fdOne\n");
+            return 4;
+        }
+        close(fdOne[0]);
+        
+        // compute factorial of recvNumber
+        int factorial = 1;
+    
+        for (int i = 1; i <= recvNumber; i++)
+            factorial *= i;
+        
+        // write back the factorial to the fdSecond pipe to be read by the parent
+        if (write(fdSecond[1], &factorial, sizeof(factorial)) == -1)
+        {
+            printf("An error occured while writing into the pipe fdSecond\n");
+            return 5;
+        }
+        close(fdSecond[1]);
+    }
+    
+    // in parent process (parent sends the number to the child via fdOne and receives the computer factorial via fdSecond which is then displayed as final output)
+    else
+    {
+        close(fdOne[0]);
+        close(fdSecond[1]);
+        
+        int result;
+        
+        if (write(fdOne[1], &number, sizeof(number)) == -1)
+        {
+            printf("An error occured while writing into pipe fdOne\n");
+            return 6;
+        }
+        close(fdOne[1]);
+        
+        // read computer factorial from child via fdSecond and display as final output
+        if (read(fdSecond[0], &result, sizeof(result)) == -1)
+        {
+            printf("An error occured while reading from the pipe fdSecond\n");
+            return 7;
+        }
+        close(fdSecond[0]);
+        wait(NULL); // wait for child process to finish its execution
+        
+        printf("The computed factorial returned back to parent via pipe fdSecond is - %d", result);
+    }
+    
+    return 0;
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+4. Child sends message to parent, parent reverses and sends it back using PIPEs
+
+#include "D:\network-core\pipes\header1.h"
+
+// Function to reverse a string
+void reverse_string(char *str) {
+    int start = 0;
+    int end = strlen(str) - 1;
+    while (start < end) {
+        char temp = str[start];
+        str[start] = str[end];
+        str[end] = temp;
+        start++;
+        end--;
+    }
+}
+
+int main()
+{
+    // Define two pipes for bidirectional communication
+    int fd1[2]; // Pipe for child to parent communication
+    int fd2[2]; // Pipe for parent to child communication
+    
+    // Create pipes
+    if (pipe(fd1) == -1 || pipe(fd2) == -1)
+    {
+        printf("An error occurred while opening the pipes\n");
+        return 1;
+    }
+    
+    // Create another process (child process)
+    int id = fork();
+    
+    if (id == -1)
+    {
+        printf("Could not fork a child process\n");
+        return 2;
+    }
+    
+    // In child process
+    if (id == 0)
+    {
+        close(fd1[0]); // Close unused read end of first pipe
+        close(fd2[1]); // Close unused write end of second pipe
+
+        char message[100];
+        
+        while (1)
+        {
+            printf("Child: Input a message (type 'END' to stop): ");
+            fgets(message, sizeof(message), stdin);
+            
+            // Remove newline character from the string
+            message[strcspn(message, "\n")] = '\0';
+            
+            // Send message to parent
+            if (write(fd1[1], message, strlen(message) + 1) == -1)
+            {
+                printf("An error occurred while writing to the pipe\n");
+                return 3;
+            }
+
+            // If the message is "END", exit the loop and terminate the program
+            if (strcmp(message, "END") == 0)
+                break;
+            
+            // Receive reversed message from parent
+            if (read(fd2[0], message, sizeof(message)) == -1)
+            {
+                printf("An error occurred while reading from the pipe\n");
+                return 4;
+            }
+
+            printf("Child received reversed message: %s\n", message);
+        }
+
+        close(fd1[1]);
+        close(fd2[0]);
+    }
+    
+    // In parent process
+    else
+    {
+        close(fd1[1]); // Close unused write end of first pipe
+        close(fd2[0]); // Close unused read end of second pipe
+        
+        char message[100];
+        
+        while (1)
+        {
+            // Receive message from child
+            if (read(fd1[0], message, sizeof(message)) == -1)
+            {
+                printf("An error occurred while reading from the pipe\n");
+                return 4;
+            }
+
+            // If the message is "END", exit the loop and terminate the program
+            if (strcmp(message, "END") == 0)
+                break;
+
+            // Reverse the message
+            reverse_string(message);
+
+            // Send the reversed message back to child
+            if (write(fd2[1], message, strlen(message) + 1) == -1)
+            {
+                printf("An error occurred while writing to the pipe\n");
+                return 3;
+            }
+
+            printf("Parent sent reversed message: %s\n", message);
+        }
+
+        close(fd1[0]);
+        close(fd2[1]);
+    }
+    
+    return 0;
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+5. FIFOs check Palindrome
+
+#include "D:\network-core\pipes\header2.h"
+
+// to check for palindrome
+int is_palindrome(char *str)
+{
+    int len = strlen(str);
+    
+    for (int i = 0; i < len / 2; i++)
+    {
+        if (str[i] != str[len - i - 1])
+            return 0; // not a palindrome
+    }
+    return 1; // is palindrome
+}
+
+int main()
+{
+    // FIFO file paths
+    const char *fifo_send = "/tmp/fifo_send";
+    const char *fifo_receive = "/tmp/fifo_receive";
+    
+    // create named pipes (FIFOs)
+    if (mkfifo(fifo_send, 0666) == -1)
+    {
+        perror("mkfifo fifo_send failed");
+        exit(1);
+    }
+    
+    if (mkfifo(fifo_receive, 0666) == -1)
+    {
+        perror("mkfifo fifo_receive failed");
+        exit(1);
+    }
+
+    // fork to create a receiver process
+    pid_t pid = fork();
+
+    if (pid == -1)
+    {
+        perror("Fork failed");
+        exit(1);
+    }
+
+    // in sender process
+    if (pid > 0)
+    {
+        char message[100];
+        int fifo_send_fd, fifo_receive_fd;
+
+        // open the send FIFO for writing
+        fifo_send_fd = open(fifo_send, O_WRONLY);
+        if (fifo_send_fd == -1)
+        {
+            perror("Sender: Failed to open fifo_send");
+            exit(1);
+        }
+
+        // open the receive FIFO for reading the response
+        fifo_receive_fd = open(fifo_receive, O_RDONLY);
+        if (fifo_receive_fd == -1)
+        {
+            perror("Sender: Failed to open fifo_receive");
+            exit(1);
+        }
+
+        // get the number as a word from the user
+        printf("Sender: Enter a number as a word: ");
+        fgets(message, sizeof(message), stdin);
+        message[strcspn(message, "\n")] = '\0'; // remove newline
+
+        // send the word to the receiver through the FIFO
+        write(fifo_send_fd, message, strlen(message) + 1);
+        close(fifo_send_fd);
+
+        // receive the response from the receiver (Palindrome/Not Palindrome)
+        char response[50];
+        read(fifo_receive_fd, response, sizeof(response));
+        printf("Sender: Received response: %s\n", response);
+
+        close(fifo_receive_fd);
+
+        // clean up FIFOs and essentially deleting the FIFO files
+        unlink(fifo_send);
+        unlink(fifo_receive);
+    }
+    
+    // in receiver process
+    else
+    {
+        char message[100];
+        int fifo_send_fd, fifo_receive_fd;
+
+        // open the receive FIFO for reading
+        fifo_receive_fd = open(fifo_send, O_RDONLY);
+        if (fifo_receive_fd == -1)
+        {
+            perror("Receiver: Failed to open fifo_send");
+            exit(1);
+        }
+
+        // open the send FIFO for writing the response
+        fifo_send_fd = open(fifo_receive, O_WRONLY);
+        if (fifo_send_fd == -1)
+        {
+            perror("Receiver: Failed to open fifo_receive");
+            exit(1);
+        }
+
+        // receive the word from the sender
+        read(fifo_receive_fd, message, sizeof(message));
+        close(fifo_receive_fd);
+
+        // check if the received word is a palindrome
+        if (is_palindrome(message))
+            write(fifo_send_fd, "Palindrome", strlen("Palindrome") + 1); // send "Palindrome" response back to sender
+            
+        else
+            write(fifo_send_fd, "Not Palindrome", strlen("Not Palindrome") + 1); // send "Not Palindrome" responser back to sender
+            
+        close(fifo_send_fd);
+    }
+
+    return 0;
+}
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+6. Basic FIFOs
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <fcntl.h>
+
+/*
+FROM LINUX MAN PAGE OF OPEN FUNCTION:
+OPENING THE READ OR WRITE END OF A FIFO BLOCKS UNTIL THE OTHER END IS ALSO OPENED (BY ANOTHER PROCESS OR THREAD)
+basically - if you open a FIFO for writing, the open call hangs or blocks until another process comes along and opens the same FIFO for reading and vice versa
+*/
+
+int main()
+{
+    // first parameter of mkfifo is the actual FIFO file to be created and the next parameter are its file permissions in octal
+    if (mkfifo("myfifo1", 0777) == -1)
+    {
+        // meaning something else has happened and we actually could not create the FIFO file
+        // we do this because when we rerun the code after creating the FIFO file, it leads to the error
+        // so this is just a check condition for that to see if it already exists or not
+        if (errno != EEXIST)
+        {
+            printf("Could not create FIFO file\n");
+            return 1;
+        }
+    }
+    
+    // second parameter is why you want to open this file? (O_WRONLY - open write only)
+    // in FIFOs, the open function return the file descriptors
+    int fd = open("myfifo1", O_WRONLY);
+    
+    if (fd == -1)
+    {
+        printf("Could not open FIFO\n");
+        return 2;
+    }
+    
+    int x = 97;
+    if (write(fd, &x, sizeof(int)) == -1)
+    {
+        printf("Could not write into FIFO file\n");
+        return 3;
+    }
+    close(fd);
+    
+    return 0;
+}
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Message Queues:
+
+header content:
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+1. MQ - basic sender and receiver:
+
+basic_sender:
+
+// sender (sends messages to the message queue)
+
+#include "D:\network-core\header-messageQueues.h"
+
+#define MAX_TEXT 512   // maximum length of the message that can be sent
+
+// structure of message queue should start with a long int
+struct message
+{
+    long int messageType;
+    char messageContent[MAX_TEXT]; // to store the data that will be written into the message queue
+};
+
+int main()
+{
+    int running = 1;
+    int msgid;
+    struct message msg;
+    
+    char buffer[50]; // buffer array to store user input
+    
+    // create a message queue with key = 12345 with permissions 0666
+    // IPC_CREAT means that we are going to create the message queue
+    key_t key = 12345; // same key in sender and receiver
+    msgid = msgget(key , 0666|IPC_CREAT);
+    
+    if (msgid == -1)
+    {
+        printf("Error in creating the message queue\n");
+        return 1;
+    }
+
+    // run a while loop to start sending messages to the queue
+    while (running)
+    {
+        // temporarily store the user input message into buffer
+        printf("Enter a message to be sent (end to stop) - ");
+        fgets(buffer, 50, stdin);
+        
+        // this value is assigned here cause it will be used in the receiver process
+        msg.messageType = 1;
+        
+        strcpy(msg.messageContent, buffer);
+        
+        // the msgsend function takes in 4 parameters
+        // firstly the message ID, secondly the structure variable (or bascially the blueprint of the message)
+        // thirdly the maximum size of the message and fouthly the last parameter controls if the queue is full or the system limit is reached
+        // therefore the fourth parameter 0 means suspend the sending process and wait for space to be available in the queue
+        // 1 woule mean to not wait and return / terminate immediately
+        if (msgsnd(msgid, &msg, MAX_TEXT, 0) == -1) // msgsnd returns -1 if the message is not sent
+        {   
+            printf("Message not sent\n");
+            return 2;
+        }
+        
+        // check for the first three character to be equal to = "end" for termination
+        if (strncmp(buffer, "end", 3) == 0)
+            running = 0;
+    }
+    
+    return 0;
+ }
+
+basic_receiver:
+
+// receiver (receives messages from the message queue)
+
+#include "D:\network-core\header-messageQueues.h"
+
+#define MAX_TEXT 512
+
+struct message
+{
+    long int messageType;
+    char messageContent[MAX_TEXT];
+};
+
+int main()
+{
+    int running = 1;
+    int msgid;
+    struct message msg;
+    
+    // value 0 indicates messages will be received in the same order as they are put into the queue
+    long int messageToReceive = 0;
+    
+    key_t key = 12345; // same key in sender and receiver
+    // since we run the sender code first, and thence the queue is already created
+    // consequently, the IPC_CREAT system call will have no impact
+    msgid = msgget(key, 0666|IPC_CREAT);
+    
+    while (running)
+    {
+        msgrcv(msgid, &msg, MAX_TEXT, messageToReceive, 0);
+        
+	    // check if the message is "end" before printing
+        if (strncmp(msg.messageContent, "end", 3) == 0)
+            running = 0; // stop the receiver loop
+
+	    // print the message content only if it's not "end"
+	    else
+	        printf("Message received -  %s\n", msg.messageContent);
+    }
+    
+    // destroy the message queue finally
+    // IPC_RMID means IPC remove ID
+    msgctl(msgid, IPC_RMID, 0);
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+2. MQ - MQ + VRC
+
+sender code:
+#include "D:\network-core\message queues\header1.h"
+
+#define MAX_TEXT 512   // maximum length of the message that can be sent
+
+// structure of message queue should start with a long int
+struct message {
+    long int messageType;
+    char messageContent[MAX_TEXT]; // to store the data that will be written into the message queue
+};
+
+int main() {
+    int running = 1;
+    int msgid;
+    struct message msg;
+    
+    char buffer[50]; // buffer array to store user input
+    
+    // create a message queue with key = 12345 with permissions 0666
+    key_t key = 12345; // same key in sender and receiver
+    msgid = msgget(key, 0666 | IPC_CREAT);
+    
+    if (msgid == -1) {
+        printf("Error in creating the message queue\n");
+        return 1;
+    }
+
+    // run a while loop to start sending messages to the queue
+    while (running) {
+        // temporarily store the user input message into buffer
+        printf("Enter a binary dataword to be sent (end to stop) - ");
+        fgets(buffer, 50, stdin);
+        printf("\n");
+
+        // remove the newline character from input
+        buffer[strcspn(buffer, "\n")] = '\0';
+        
+        // check for "end" input to stop the process
+        if (strncmp(buffer, "end", 3) == 0) {
+            running = 0;
+        }
+
+        // this value is assigned here because it will be used in the receiver process
+        msg.messageType = 1;
+        
+        strcpy(msg.messageContent, buffer);
+        
+        // Send the dataword (without VRC) via the message queue
+        if (msgsnd(msgid, &msg, MAX_TEXT, 0) == -1) {
+            printf("Message not sent\n");
+            return 2;
+        }
+
+        printf("Dataword sent: %s\n", msg.messageContent);
+        
+        // Wait to receive the codeword (with VRC) from the receiver
+        if (msgrcv(msgid, &msg, MAX_TEXT, 0, 0) == -1) {
+            printf("Message not received\n");
+            return 3;
+        }
+
+        printf("Received codeword from receiver: %s\n", msg.messageContent);
+    }
+
+    return 0;
+}
+
+receiver code:
+#include "D:\network-core\message queues\header1.h"
+
+#define MAX_TEXT 512
+
+struct message {
+    long int messageType;
+    char messageContent[MAX_TEXT];
+};
+
+// Function to compute the VRC (even parity) bit and append it to the dataword
+char compute_vrc(char *dataword) {
+    int count = 0;
+    
+    // Count the number of 1's in the dataword
+    for (int i = 0; i < strlen(dataword); i++) {
+        if (dataword[i] == '1') {
+            count++;
+        }
+    }
+    
+    // If count is odd, append '1', else append '0' (even parity)
+    if (count % 2 == 0) {
+        return '0'; // even parity, append '0'
+    } else {
+        return '1'; // odd parity, append '1' to make it even parity
+    }
+}
+
+int main() {
+    int running = 1;
+    int msgid;
+    struct message msg;
+    
+    // value 0 indicates messages will be received in the same order as they are put into the queue
+    long int messageToReceive = 0;
+    
+    key_t key = 12345; // same key in sender and receiver
+    msgid = msgget(key, 0666 | IPC_CREAT);
+    
+    while (running) {
+        msgrcv(msgid, &msg, MAX_TEXT, messageToReceive, 0);
+        
+        // check if the message is "end" before printing
+        if (strncmp(msg.messageContent, "end", 3) == 0) {
+            running = 0; // stop the receiver loop
+        } else {
+            // Compute the VRC and append it to the received dataword
+            char vrc = compute_vrc(msg.messageContent);
+            strcat(msg.messageContent, &vrc); // Append the VRC bit to the binary string
+            
+            // Send the codeword (dataword + VRC bit) back to the sender
+            if (msgsnd(msgid, &msg, MAX_TEXT, 0) == -1) {
+                printf("Message not sent\n");
+                return 3;
+            }
+
+            // Print the codeword
+            printf("Codeword (with VRC) sent to sender: %s\n", msg.messageContent);
+        }
+    }
+    
+    // Destroy the message queue finally
+    msgctl(msgid, IPC_RMID, 0);
+    
+    return 0;
+}
+
+----------------------------------------------------------------------------------------------------------------------------------
+
+3. MQ - MQ + Bin, Octal, Hex
+
+sender code:
+#include "D:\network-core\message queues\header2.h"
+
+#define MAX_TEXT 512   // maximum length of the message that can be sent
+
+// structure of message queue should start with a long int
+struct message {
+    long int messageType;
+    char messageContent[MAX_TEXT]; // to store the data that will be written into the message queue
+};
+
+int main() {
+    int running = 1;
+    int msgid;
+    struct message msg;
+    
+    char buffer[50]; // buffer array to store user input
+    
+    // create a message queue with key = 12345 with permissions 0666
+    key_t key = 12345; // same key in sender and receiver
+    msgid = msgget(key, 0666 | IPC_CREAT);
+    
+    if (msgid == -1) {
+        printf("Error in creating the message queue\n");
+        return 1;
+    }
+
+    // run a while loop to start sending messages to the queue
+    while (running) {
+        // temporarily store the user input message into buffer
+        printf("Enter a decimal number to be sent (end to stop) - ");
+        fgets(buffer, 50, stdin);
+        printf("\n");
+
+        // remove the newline character from input
+        buffer[strcspn(buffer, "\n")] = '\0';
+        
+        // check for "end" input to stop the process
+        if (strncmp(buffer, "end", 3) == 0) {
+            running = 0;
+        }
+
+        // this value is assigned here because it will be used in the receiver process
+        msg.messageType = 1;
+        
+        strcpy(msg.messageContent, buffer);
+        
+        // Send the decimal number to the receiver
+        if (msgsnd(msgid, &msg, MAX_TEXT, 0) == -1) {
+            printf("Message not sent\n");
+            return 2;
+        }
+
+        printf("Decimal number sent: %s\n", msg.messageContent);
+        
+        // Wait to receive the binary, octal, and hexadecimal values from the receiver
+        if (msgrcv(msgid, &msg, MAX_TEXT, 0, 0) == -1) {
+            printf("Message not received\n");
+            return 3;
+        }
+
+        // Print the received result from the receiver
+        printf("Received result from receiver: %s\n", msg.messageContent);
+    }
+
+    return 0;
+}
+
+receiver code:
+#include "D:\network-core\message queues\header2.h"
+
+#define MAX_TEXT 512
+
+// structure of message queue should start with a long int
+struct message {
+    long int messageType;
+    char messageContent[MAX_TEXT];
+};
+
+// Function to convert decimal to binary
+void decimal_to_binary(int n, char *bin) {
+    int i = 0;
+    while (n > 0) {
+        bin[i] = (n % 2) + '0'; // get the binary digit
+        n = n / 2;
+        i++;
+    }
+    bin[i] = '\0';
+    
+    // Reverse the binary string
+    int len = strlen(bin);
+    for (int j = 0; j < len / 2; j++) {
+        char temp = bin[j];
+        bin[j] = bin[len - j - 1];
+        bin[len - j - 1] = temp;
+    }
+}
+
+// Function to convert decimal to octal
+void decimal_to_octal(int n, char *oct) {
+    int i = 0;
+    while (n > 0) {
+        oct[i] = (n % 8) + '0'; // get the octal digit
+        n = n / 8;
+        i++;
+    }
+    oct[i] = '\0';
+    
+    // Reverse the octal string
+    int len = strlen(oct);
+    for (int j = 0; j < len / 2; j++) {
+        char temp = oct[j];
+        oct[j] = oct[len - j - 1];
+        oct[len - j - 1] = temp;
+    }
+}
+
+// Function to convert decimal to hexadecimal
+void decimal_to_hexadecimal(int n, char *hex) {
+    int i = 0;
+    while (n > 0) {
+        int rem = n % 16;
+        if (rem < 10) {
+            hex[i] = rem + '0'; // get the hex digit
+        } else {
+            hex[i] = rem - 10 + 'A'; // get the hex letter
+        }
+        n = n / 16;
+        i++;
+    }
+    hex[i] = '\0';
+    
+    // Reverse the hexadecimal string
+    int len = strlen(hex);
+    for (int j = 0; j < len / 2; j++) {
+        char temp = hex[j];
+        hex[j] = hex[len - j - 1];
+        hex[len - j - 1] = temp;
+    }
+}
+
+int main() {
+    int msgid;
+    struct message msg;
+    
+    long int messageToReceive = 0;
+    
+    key_t key = 12345; // same key in sender and receiver
+    msgid = msgget(key, 0666 | IPC_CREAT);
+    
+    while (1) {
+        msgrcv(msgid, &msg, MAX_TEXT, messageToReceive, 0);
+        
+        // If message is "end", stop the receiver loop
+        if (strncmp(msg.messageContent, "end", 3) == 0) {
+            break;
+        } else {
+            int decimal = atoi(msg.messageContent); // Convert the string to an integer
+            
+            // Arrays to store binary, octal, and hexadecimal strings
+            char binary[50], octal[50], hexadecimal[50];
+            
+            // Convert decimal number to binary, octal, and hexadecimal
+            decimal_to_binary(decimal, binary);
+            decimal_to_octal(decimal, octal);
+            decimal_to_hexadecimal(decimal, hexadecimal);
+            
+            // Format the result and send it back to the sender
+            snprintf(msg.messageContent, MAX_TEXT, "%s %s %s", binary, octal, hexadecimal);
+            
+            // Send the result back to the sender
+            if (msgsnd(msgid, &msg, MAX_TEXT, 0) == -1) {
+                printf("Message not sent\n");
+                return 3;
+            }
+
+            // Print the result
+            printf("Binary: %s, Octal: %s, Hexadecimal: %s\n", binary, octal, hexadecimal);
+        }
+    }
+    
+    // Destroy the message queue
+    msgctl(msgid, IPC_RMID, 0);
+    
+    return 0;
+}
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Shared Memories:
+
+header:
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+
+1. SHM - Send para then count number of vowels, consonants and all
+
+sender code:
+#include "D:\network-core\shared memories\header3.h"
+
+#define MAX_TEXT 1024 // maximum size for shared memory
+
+int main()
+{
+    void *shared_memory;
+    char buff[MAX_TEXT];
+    int shmid;
+    
+    // Create shared memory segment with key 1122
+    shmid = shmget((key_t)1122, MAX_TEXT, 0666|IPC_CREAT);
+    if (shmid == -1)
+    {
+        perror("Error in shmget");
+        return 1;
+    }
+
+    printf("Key of shared memory segment is - %d\n", shmid);
+    
+    // Attach to the shared memory segment
+    shared_memory = shmat(shmid, NULL, 0);
+    if (shared_memory == (void *) -1)
+    {
+        perror("Error in shmat");
+        return 2;
+    }
+
+    printf("Process attached at memory address - %p\n", shared_memory);
+    
+    // Ask the user to enter a paragraph
+    printf("Enter a paragraph to write to shared memory: \n");
+    fgets(buff, MAX_TEXT, stdin); // Get input from the user
+    
+    // Copy the paragraph into shared memory
+    strcpy(shared_memory, buff);
+    
+    printf("You have written to shared memory: \n%s\n", (char *)shared_memory);
+    
+    return 0;
+}
+
+receiver code:
+#include "D:\network-core\shared memories\header3.h"
+
+#define MAX_TEXT 1024
+
+// Function to count vowels, consonants, spaces, and sentences
+void count_characters_and_sentences(char *text, int *vowels, int *consonants, int *spaces, int *sentences)
+{
+    *vowels = 0;
+    *consonants = 0;
+    *spaces = 0;
+    *sentences = 0;
+
+    for (int i = 0; text[i] != '\0'; i++) {
+        char ch = text[i];
+
+        // Count vowels (both uppercase and lowercase)
+        if (ch == 'A' || ch == 'E' || ch == 'I' || ch == 'O' || ch == 'U' ||
+            ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u') {
+            (*vowels)++;
+        }
+        // Count consonants (letters other than vowels)
+        else if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
+            (*consonants)++;
+        }
+        // Count spaces
+        else if (ch == ' ') {
+            (*spaces)++;
+        }
+        // Count sentences (using '.', '!', or '?')
+        else if (ch == '.' || ch == '!' || ch == '?') {
+            (*sentences)++;
+        }
+    }
+}
+
+int main()
+{
+    void *shared_memory;
+    char *text;
+    int shmid;
+
+    // Retrieve the shared memory segment with key 1122
+    shmid = shmget((key_t)1122, MAX_TEXT, 0666);
+    if (shmid == -1)
+    {
+        perror("Error in shmget");
+        return 1;
+    }
+
+    printf("Key of the shared memory is - %d\n", shmid);
+
+    // Attach to the shared memory segment
+    shared_memory = shmat(shmid, NULL, 0);
+    if (shared_memory == (void *) -1)
+    {
+        perror("Error in shmat");
+        return 2;
+    }
+
+    printf("Process attached at memory address - %p\n", shared_memory);
+
+    // Read the paragraph from shared memory
+    text = (char *)shared_memory;
+
+    printf("Data read from shared memory: \n%s\n", text);
+
+    // Variables to store the counts
+    int vowels, consonants, spaces, sentences;
+
+    // Call the function to count characters and sentences
+    count_characters_and_sentences(text, &vowels, &consonants, &spaces, &sentences);
+
+    // Display the counts
+    printf("Total Vowels: %d\n", vowels);
+    printf("Total Consonants: %d\n", consonants);
+    printf("Total Spaces: %d\n", spaces);
+    printf("Total Sentences: %d\n", sentences);
+
+    return 0;
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------------

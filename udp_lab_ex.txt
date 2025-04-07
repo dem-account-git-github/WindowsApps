@@ -1,0 +1,457 @@
+1. UDP - echo client server + reversal
+
+client code: 
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#include "header.h"
+
+#define SERVER_IP "127.0.0.1"
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+int main() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    socklen_t addr_len = sizeof(server_addr);
+
+    // Create UDP socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
+
+    // Get message from user
+    printf("Enter message to send: ");
+    fgets(buffer, BUFFER_SIZE, stdin);
+    buffer[strcspn(buffer, "\n")] = 0; // Remove newline
+
+    // Send message to server
+    sendto(sockfd, buffer, strlen(buffer), 0, 
+          (struct sockaddr *)&server_addr, addr_len);
+    printf("Message sent to server.\n");
+
+    // Receive response from server
+    memset(buffer, 0, BUFFER_SIZE);
+    ssize_t received = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, 
+                               (struct sockaddr *)&server_addr, &addr_len);
+    if (received < 0) {
+        perror("Receive failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    buffer[received] = '\0';  // Null-terminate the response
+    printf("Server response: %s\n", buffer);
+
+    close(sockfd);
+    return 0;
+}
+
+server code:
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+
+#include "header.h"
+#include <time.h>  // For date and time functions
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+// Function to get the current date and time
+void get_current_time(char *time_str) {
+    time_t raw_time;
+    struct tm *time_info;
+
+    time(&raw_time);
+    time_info = localtime(&raw_time);
+
+    strftime(time_str, BUFFER_SIZE, "%Y-%m-%d %H:%M:%S", time_info);
+}
+
+int main() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    char time_str[BUFFER_SIZE];
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+
+    // Create UDP socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind socket to the address
+    if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("UDP Server listening on port %d...\n", PORT);
+
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+
+        // Receive message from client
+        ssize_t received = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, 
+                                   (struct sockaddr *)&client_addr, &addr_len);
+        if (received < 0) {
+            perror("Receive failed");
+            continue;
+        }
+
+        buffer[received] = '\0';  // Null-terminate the message
+        printf("Received from client: %s\n", buffer);
+
+        // Get current date and time
+        get_current_time(time_str);
+
+        // Calculate required size for the response
+        size_t response_size = strlen(buffer) + strlen(" [Server Time: ]") + strlen(time_str) + 1;
+
+        // Allocate memory for the response
+        char *response = (char *)malloc(response_size);
+        if (!response) {
+            perror("Memory allocation failed");
+            continue;
+        }
+
+        // Prepare response with date and time
+        snprintf(response, response_size, "%s [Server Time: %s]", buffer, time_str);
+
+        // Send response back to client
+        sendto(sockfd, response, strlen(response), 0, 
+              (struct sockaddr *)&client_addr, addr_len);
+        printf("Sent to client: %s\n", response);
+
+        // Free allocated memory
+        free(response);
+    }
+
+    close(sockfd);
+    return 0;
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+2. UDP - send lengthy para and count vowels, consonants and spaces
+
+client code:
+
+#include "header.h"
+
+#define SERVER_IP "127.0.0.1"
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+int main() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    struct sockaddr_in server_addr;
+    socklen_t addr_len = sizeof(server_addr);
+
+    // Create UDP socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(PORT);
+    server_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
+
+    // Get message from user
+    printf("Enter a lengthy paragraph: ");
+    fgets(buffer, BUFFER_SIZE, stdin);
+    buffer[strcspn(buffer, "\n")] = 0; // Remove newline
+
+    // Send message to server
+    sendto(sockfd, buffer, strlen(buffer), 0, 
+          (struct sockaddr *)&server_addr, addr_len);
+    printf("Message sent to server.\n");
+
+    // Receive result from server
+    memset(buffer, 0, BUFFER_SIZE);
+    ssize_t received = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, 
+                               (struct sockaddr *)&server_addr, &addr_len);
+    if (received < 0) {
+        perror("Receive failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    buffer[received] = '\0';  // Null-terminate the response
+    printf("Server response: %s\n", buffer);
+
+    close(sockfd);
+    return 0;
+}
+
+server code:
+
+#include "header.h"
+#include <ctype.h>
+
+#define PORT 8080
+#define BUFFER_SIZE 1024
+
+// Function to count vowels, consonants, white spaces, and digits
+void analyze_message(const char *message, char *result) {
+    int vowels = 0, consonants = 0, spaces = 0, digits = 0;
+
+    for (int i = 0; message[i] != '\0'; i++) {
+        char ch = tolower(message[i]);  // Convert to lowercase for easier checking
+
+        if (ch == 'a' || ch == 'e' || ch == 'i' || ch == 'o' || ch == 'u') {
+            vowels++;
+        } else if (isalpha(ch)) {  // Check if it's a consonant
+            consonants++;
+        } else if (isdigit(ch)) {  // Check if it's a digit
+            digits++;
+        } else if (isspace(ch)) {  // Check if it's a white space
+            spaces++;
+        }
+    }
+
+    // Format the result string
+    snprintf(result, BUFFER_SIZE, "Vowels: %d, Consonants: %d, Digits: %d, Spaces: %d",
+             vowels, consonants, digits, spaces);
+}
+
+int main() {
+    int sockfd;
+    char buffer[BUFFER_SIZE];
+    char result[BUFFER_SIZE];
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+
+    // Create UDP socket
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Set up server address
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    // Bind socket to the address
+    if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("UDP Server listening on port %d...\n", PORT);
+
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+
+        // Receive message from client
+        ssize_t received = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, 
+                                   (struct sockaddr *)&client_addr, &addr_len);
+        if (received < 0) {
+            perror("Receive failed");
+            continue;
+        }
+
+        buffer[received] = '\0';  // Null-terminate the message
+        printf("Received from client: %s\n", buffer);
+
+        // Analyze the message
+        analyze_message(buffer, result);
+
+        // Send the result back to client
+        sendto(sockfd, result, strlen(result), 0, 
+              (struct sockaddr *)&client_addr, addr_len);
+        printf("Sent to client: %s\n", result);
+    }
+
+    close(sockfd);
+    return 0;
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------
+
+3. UDP - simulate nslookup
+
+client code:
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
+#include "header.h"
+#define SERVER_IP "127.0.0.1"
+#define PORT 8080
+#define BUFFER_SIZE 1024
+int main() {
+int sockfd;
+char buffer[BUFFER_SIZE];
+struct sockaddr_in server_addr;
+socklen_t addr_len = sizeof(server_addr);
+// Create UDP socket
+if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+perror("Socket creation failed");
+exit(EXIT_FAILURE);
+}
+// Configure server address structure
+memset(&server_addr, 0, sizeof(server_addr));
+server_addr.sin_family = AF_INET;
+server_addr.sin_port = htons(PORT);
+server_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
+// Send domain name to server
+printf("Enter domain name to lookup: ");
+fgets(buffer, BUFFER_SIZE, stdin);
+buffer[strcspn(buffer, "\n")] = 0; // Remove newline character
+sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *)&server_addr,
+addr_len);
+printf("Domain name sent to server.\n");
+// Receive resolved IP addresses from server
+ssize_t received = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr
+*)&server_addr, &addr_len);
+if (received < 0) {
+perror("Receive failed");
+close(sockfd);
+exit(EXIT_FAILURE);
+}
+buffer[received] = '\0'; // Null-terminate received string
+printf("Server response:\n%s\n", buffer);
+close(sockfd);
+return 0;
+}
+
+server code:
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+
+
+#include "header.h"
+#define PORT 8080
+#define BUFFER_SIZE 1024
+int main() {
+int sockfd;
+char buffer[BUFFER_SIZE];
+struct sockaddr_in server_addr, client_addr;
+socklen_t addr_len = sizeof(client_addr);
+// Create UDP socket
+if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+perror("Socket creation failed");
+exit(EXIT_FAILURE);
+}
+// Configure server address structure
+memset(&server_addr, 0, sizeof(server_addr));
+server_addr.sin_family = AF_INET;
+server_addr.sin_addr.s_addr = INADDR_ANY; // Listen on any IP address
+server_addr.sin_port = htons(PORT);
+// Bind the socket to the server address
+if (bind(sockfd, (const struct sockaddr *)&server_addr, sizeof(server_addr)) <
+0) {
+perror("Bind failed");
+close(sockfd);
+exit(EXIT_FAILURE);
+}
+printf("UDP Server listening on port %d...\n", PORT);
+while (1) {
+memset(buffer, 0, BUFFER_SIZE);
+// Receive data from client (domain name)
+ssize_t received = recvfrom(sockfd, buffer, BUFFER_SIZE, 0,
+(struct sockaddr *)&client_addr, &addr_len);
+if (received < 0) {
+perror("Receive failed");
+continue;
+}
+buffer[received] = '\0'; // Null-terminate the received string
+printf("Received domain name from client: %s\n", buffer);
+// Get IP addresses for the domain name using getaddrinfo
+struct addrinfo hints, *res, *p;
+char ipstr[INET6_ADDRSTRLEN];
+int status;
+memset(&hints, 0, sizeof(hints));
+hints.ai_family = AF_UNSPEC; // Both IPv4 and IPv6
+hints.ai_socktype = SOCK_DGRAM;
+if ((status = getaddrinfo(buffer, NULL, &hints, &res)) != 0) {
+const char *error_msg = "Failed to resolve domain name";
+sendto(sockfd, error_msg, strlen(error_msg), 0, (struct sockaddr
+*)&client_addr, addr_len);
+printf("Error: %s\n", error_msg);
+continue;
+}
+// Prepare the response with resolved IPs
+char response[BUFFER_SIZE];
+memset(response, 0, sizeof(response));
+int response_len = 0;
+for (p = res; p != NULL; p = p->ai_next) {
+void *addr;
+// IPv4
+if (p->ai_family == AF_INET) {
+struct sockaddr_in *ipv4 = (struct sockaddr_in *)p->ai_addr;
+addr = &(ipv4->sin_addr);
+inet_ntop(p->ai_family, addr, ipstr, sizeof(ipstr));
+response_len += snprintf(response + response_len, BUFFER_SIZE -
+response_len,
+"IPv4: %s\n", ipstr);
+}
+// IPv6
+else if (p->ai_family == AF_INET6) {
+struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)p->ai_addr;
+addr = &(ipv6->sin6_addr);
+inet_ntop(p->ai_family, addr, ipstr, sizeof(ipstr));
+response_len += snprintf(response + response_len, BUFFER_SIZE -
+response_len,
+"IPv6: %s\n", ipstr);
+}
+}
+freeaddrinfo(res);
+// Send the resolved IP addresses back to the client
+if (response_len > 0) {
+sendto(sockfd, response, response_len, 0, (struct sockaddr
+*)&client_addr, addr_len);
+printf("Sent resolved IP addresses to client.\n");
+} else {
+const char *error_msg = "No IP addresses found for the domain";
+sendto(sockfd, error_msg, strlen(error_msg), 0, (struct sockaddr
+*)&client_addr, addr_len);
+printf("Error: No IP addresses found.\n");
+}
+}
+close(sockfd);
+return 0;
+}
+
+---------------------------------------------------------------------------------------------------------------------------------------------
