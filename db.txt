@@ -1,0 +1,1011 @@
+EXERCISE 1
+
+-- 1. Create Tables
+CREATE TABLE Student (
+    sname VARCHAR2(50),
+    regno VARCHAR2(10),
+    dept VARCHAR2(20),
+    year NUMBER,
+    Mark1 NUMBER,
+    Mark2 NUMBER,
+    Mark3 NUMBER,
+    Total NUMBER,
+    Average NUMBER
+);
+
+CREATE TABLE Faculty (
+    fname VARCHAR2(50),
+    fid NUMBER PRIMARY KEY,
+    designation VARCHAR2(50),
+    Department VARCHAR2(20),
+    Salary NUMBER
+);
+
+CREATE TABLE Course (
+    cname VARCHAR2(50),
+    ccode VARCHAR2(10) PRIMARY KEY
+);
+
+-- 2. View table structures
+DESC Student;
+DESC Faculty;
+DESC Course;
+
+-- 3. Insert data
+INSERT INTO Student VALUES ('John', '101', 'CSE', 2, 85, 90, 80, NULL, NULL);
+INSERT INTO Student VALUES ('Alice', '102', 'ECE', 3, 78, 88, 92, NULL, NULL);
+INSERT INTO Student VALUES ('Bob', '103', 'IT', 1, 90, 86, 75, NULL, NULL);
+
+INSERT INTO Faculty VALUES ('Dr. Sharma', 1, 'Professor', 'CSE', 60000);
+INSERT INTO Faculty VALUES ('Dr. Kumar', 2, 'Associate Professor', 'ECE', 55000);
+INSERT INTO Faculty VALUES ('Dr. Patel', 3, 'Assistant Professor', 'IT', 50000);
+
+INSERT INTO Course VALUES ('DBMS', 'CS302');
+INSERT INTO Course VALUES ('Computer Networks', 'CS303');
+INSERT INTO Course VALUES ('Operating Systems', 'CS304');
+
+-- 4. Display all records
+SELECT * FROM Student;
+SELECT * FROM Faculty;
+SELECT * FROM Course;
+
+-- 5. Compute Total and Average
+UPDATE Student 
+SET Total = Mark1 + Mark2 + Mark3, 
+    Average = (Mark1 + Mark2 + Mark3) / 3;
+
+-- 6. Modify specific student record
+UPDATE Student SET dept = 'CSE' WHERE sname = 'CHIRAG';
+
+-- 7. Delete students from ECE department
+DELETE FROM Student WHERE dept = 'ECE';
+
+-- 8. Display filtered records
+SELECT * FROM Student WHERE dept = 'CSE';
+SELECT fname, Department FROM Faculty;
+SELECT * FROM Faculty WHERE Department = 'CSE';
+SELECT * FROM Faculty WHERE Salary > 55000;
+SELECT * FROM Course WHERE cname = 'DBMS';
+
+-- 9. Drop and recreate Course table
+DROP TABLE Course;
+CREATE TABLE Course (
+    cname VARCHAR2(50),
+    ccode VARCHAR2(10) PRIMARY KEY
+);
+
+-- 10. Truncate Student table (keep structure, remove data)
+TRUNCATE TABLE Student;
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 2
+
+-- 1. Create students table with NOT NULL constraint on sname
+CREATE TABLE Students (
+    sname VARCHAR2(50) NOT NULL,
+    regno VARCHAR2(10),
+    dept VARCHAR2(20),
+    year NUMBER,
+    ccode VARCHAR2(10),
+    Mark NUMBER,
+    average NUMBER DEFAULT 0,
+    grade CHAR(1)
+);
+
+-- 2. Display structure of Students table
+DESC Students;
+
+-- 3. Insert a record into Students table
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('John Doe', '23BDS1001', 'CSE', 2, 'CS302', 85, 'A');
+
+-- 4. Insert a record with empty sname (should cause error)
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES (NULL, '23BDS1002', 'ECE', 3, 'CS303', 78, 'B');
+
+-- 5. Add PRIMARY KEY constraint to regno column
+ALTER TABLE Students ADD CONSTRAINT pk_students PRIMARY KEY (regno);
+
+-- 6. Insert a duplicate regno (should cause error)
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('Alice', '23BDS1001', 'IT', 1, 'CS304', 90, 'A');
+
+-- 7. Add CHECK constraint to Mark column (between 1 and 100)
+ALTER TABLE Students ADD CONSTRAINT chk_mark CHECK (Mark BETWEEN 1 AND 100);
+
+-- 8. Insert invalid Mark values (should cause error)
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('Bob', '23BDS1003', 'EEE', 4, 'CS305', -5, 'F'); -- Invalid
+
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('Charlie', '23BDS1004', 'MECH', 3, 'CS306', 110, 'A'); -- Invalid
+
+-- 9. Default constraint for Average column (already set in CREATE TABLE)
+
+-- 10. Insert record without specifying Average column
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('David', '23BDS1005', 'CSE', 2, 'CS302', 88, 'A');
+
+-- 11. Display all Students to verify default value
+SELECT * FROM Students;
+
+-- 12. Create Course table with constraints
+CREATE TABLE Course (
+    cname VARCHAR2(50) NOT NULL,
+    ccode VARCHAR2(10) PRIMARY KEY
+);
+
+-- 13. Display structure of Course table
+DESC Course;
+
+-- 14. Insert 5 records into Course table
+INSERT INTO Course VALUES ('Database Management Systems', 'CS302');
+INSERT INTO Course VALUES ('Computer Networks', 'CS303');
+INSERT INTO Course VALUES ('Operating Systems', 'CS304');
+INSERT INTO Course VALUES ('Artificial Intelligence', 'CS305');
+INSERT INTO Course VALUES ('Data Science', 'CS306');
+
+-- 15. Display all records from Course table
+SELECT * FROM Course;
+
+-- 16. Add FOREIGN KEY constraint to Students table on ccode
+ALTER TABLE Students ADD CONSTRAINT fk_students FOREIGN KEY (ccode) REFERENCES Course(ccode);
+
+-- 17. Identify foreign key constraint error and ensure valid reference
+
+-- 18. Insert 2 valid records with matching ccode
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('Eve', '23BDS1006', 'CSE', 1, 'CS302', 92, 'A');
+
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('Frank', '23BDS1007', 'IT', 3, 'CS303', 87, 'B');
+
+-- 19. Insert a record with non-existing ccode (should cause error)
+INSERT INTO Students (sname, regno, dept, year, ccode, Mark, grade) 
+VALUES ('Grace', '23BDS1008', 'ECE', 2, 'CS999', 80, 'B'); -- Invalid
+
+-- 20. Drop CHECK constraint on Mark column
+ALTER TABLE Students DROP CONSTRAINT chk_mark;
+
+-- 21. Attempt to delete all records from Course table (should fail due to foreign key)
+DELETE FROM Course;
+
+-- 22. Solution: First delete dependent records from Students, then delete from Course
+DELETE FROM Students WHERE ccode IN (SELECT ccode FROM Course);
+DELETE FROM Course;
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 3
+
+-- 1. Create Employee table
+CREATE TABLE Employee (
+    Name VARCHAR2(50),
+    EmpId NUMBER PRIMARY KEY,
+    Dept VARCHAR2(50),
+    Designation VARCHAR2(50),
+    Salary NUMBER,
+    City VARCHAR2(50)
+);
+
+-- 2. Insert 5 records into Employee table
+INSERT INTO Employee VALUES ('Alice', 101, 'SENSE', 'Professor', 70000, 'Chennai');
+INSERT INTO Employee VALUES ('Bob', 102, 'SCOPE', 'Associate Professor', 65000, 'Bangalore');
+INSERT INTO Employee VALUES ('Charlie', 103, 'SENSE', 'Lecturer', 50000, 'Chennai');
+INSERT INTO Employee VALUES ('David', 104, 'SCOPE', 'Professor', 72000, 'Delhi');
+INSERT INTO Employee VALUES ('Eve', 105, 'SITE', 'Assistant Professor', 55000, 'Mumbai');
+
+-- 3. Display maximum and minimum salary
+SELECT MAX(Salary) AS Max_Salary, MIN(Salary) AS Min_Salary FROM Employee;
+
+-- 4. Display average salary
+SELECT AVG(Salary) AS Avg_Salary FROM Employee;
+
+-- 5. Display average salary for each department
+SELECT Dept, AVG(Salary) AS Avg_Salary FROM Employee GROUP BY Dept;
+
+-- 6. Display sum of all employees' salaries
+SELECT SUM(Salary) AS Total_Salary FROM Employee;
+
+-- 7. Display department-wise sum of salaries
+SELECT Dept, SUM(Salary) AS Dept_Salary FROM Employee GROUP BY Dept;
+
+-- 8. Display the total number of employees
+SELECT COUNT(*) AS Total_Employees FROM Employee;
+
+-- 9. Display number of employees in SENSE department
+SELECT COUNT(*) AS SENSE_Employees FROM Employee WHERE Dept = 'SENSE';
+
+-- 10. Display number of employees working in SCOPE and living in Chennai
+SELECT COUNT(*) AS SCOPE_Chennai_Employees FROM Employee WHERE Dept = 'SCOPE' AND City = 'Chennai';
+
+-- 11. Display city-wise max and min salary
+SELECT City, MAX(Salary) AS Max_Salary, MIN(Salary) AS Min_Salary FROM Employee GROUP BY City;
+
+-- 12. Display department-wise min, max, average, and sum of salary
+SELECT Dept, 
+       MIN(Salary) AS Min_Salary, 
+       MAX(Salary) AS Max_Salary, 
+       AVG(Salary) AS Avg_Salary, 
+       SUM(Salary) AS Total_Salary 
+FROM Employee 
+GROUP BY Dept;
+
+-- 13. Display number of professors, department, max and min salary for each department
+SELECT Dept, COUNT(*) AS Total_Professors, MAX(Salary) AS Max_Salary, MIN(Salary) AS Min_Salary
+FROM Employee 
+WHERE Designation LIKE '%Professor%' 
+GROUP BY Dept;
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 4
+
+-- 1. Create Employee table
+CREATE TABLE Employee (
+    Name VARCHAR2(50),
+    EmpId NUMBER PRIMARY KEY,
+    Dept VARCHAR2(50),
+    Designation VARCHAR2(50),
+    Salary NUMBER,
+    City VARCHAR2(50),
+    DateOfBirth DATE,
+    MobileNumber VARCHAR2(15) UNIQUE NOT NULL
+);
+
+-- 2. Insert 5 records into Employee table
+INSERT INTO Employee VALUES ('Alice', 101, 'HR', 'Manager', 100000, 'Chennai', TO_DATE('1990-05-10', 'YYYY-MM-DD'), '9876543210');
+INSERT INTO Employee VALUES ('Bob', 102, 'IT', 'Developer', 85000, 'Bangalore', TO_DATE('1988-08-20', 'YYYY-MM-DD'), '8765432109');
+INSERT INTO Employee VALUES ('Charlie', 103, 'HR', 'Executive', 75000, 'Mumbai', TO_DATE('1995-02-15', 'YYYY-MM-DD'), '7654321098');
+INSERT INTO Employee VALUES ('David', 104, 'Finance', 'Analyst', 100000, 'Chennai', TO_DATE('1982-12-25', 'YYYY-MM-DD'), '6543210987');
+INSERT INTO Employee VALUES ('Eve', 105, 'SENSE', 'Professor', 95000, 'Delhi', TO_DATE('1993-07-30', 'YYYY-MM-DD'), '5432109876');
+
+-- 3. Display employee names in lowercase who are living in Chennai
+SELECT LOWER(Name) AS Employee_Name FROM Employee WHERE City = 'Chennai';
+
+-- 4. Display employee names in uppercase who belong to HR department
+SELECT UPPER(Name) AS Employee_Name FROM Employee WHERE Dept = 'HR';
+
+-- 5. Display all employee details where salary is Rs. 1,00,000
+SELECT * FROM Employee WHERE Salary = 100000;
+
+-- 6. Apply substring function on employee name to get last 3 characters
+SELECT Name, SUBSTR(Name, -3, 3) AS Last_Three_Chars FROM Employee;
+
+-- 7. Display next Friday's date and last day of this month
+SELECT NEXT_DAY(SYSDATE, 'FRIDAY') AS Next_Friday, 
+       LAST_DAY(SYSDATE) AS Last_Day_Of_Month 
+FROM DUAL;
+
+-- 8. Find the square root of salary of all employees
+SELECT Name, Salary, SQRT(Salary) AS Salary_Sqrt FROM Employee;
+
+-- 9. Add Date of Birth column (Already added in CREATE TABLE statement)
+
+-- 10. Display employees sorted by Date of Birth in ascending order
+SELECT * FROM Employee ORDER BY DateOfBirth ASC;
+
+-- 11. Add Mobile Number column with UNIQUE and NOT NULL constraints (Already added in CREATE TABLE statement)
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 5
+
+-- 1. Create Student table
+CREATE TABLE Student (
+    SNAME VARCHAR2(50),
+    REGNO VARCHAR2(10) PRIMARY KEY,
+    DEPT VARCHAR2(50),
+    YEAR NUMBER,
+    CCODE VARCHAR2(10),
+    MARK NUMBER,
+    GRADE CHAR(1)
+);
+
+-- 2. Insert 7 records into Student table
+INSERT INTO Student VALUES ('Alice', '23BDS1001', 'CSE', 2, 'BCSE302L', 90, 'S');
+INSERT INTO Student VALUES ('Bob', '23BDS1002', 'ECE', 3, 'BCSE303L', 85, 'A');
+INSERT INTO Student VALUES ('Charlie', '23BDS1003', 'IT', 1, 'BCSE304L', 78, 'B');
+INSERT INTO Student VALUES ('David', '23BDS1004', 'CSE', 2, 'BCSE305L', 82, 'A');
+INSERT INTO Student VALUES ('Eve', '23BDS1005', 'ECE', 3, 'BCSE302L', 67, 'C');
+INSERT INTO Student VALUES ('Frank', '23BDS1006', 'MECH', 4, 'BCSE306L', 50, 'D');
+INSERT INTO Student VALUES ('Grace', '23BDS1007', 'CSE', 2, 'BCSE303L', 95, 'S');
+
+-- 3. Display students enrolled in BCSE302L and BCSE303L
+SELECT * FROM Student WHERE CCODE IN ('BCSE302L', 'BCSE303L');
+
+-- 4. Display students NOT enrolled in BCSE302L and BCSE303L
+SELECT * FROM Student WHERE CCODE NOT IN ('BCSE302L', 'BCSE303L');
+
+-- 5. Display name & dept of students with grade S and A
+SELECT SNAME, DEPT FROM Student WHERE GRADE IN ('S', 'A');
+
+-- 6. Display name & dept of students with grade C and A
+SELECT SNAME, DEPT FROM Student WHERE GRADE IN ('C', 'A');
+
+-- 7. Display students with marks between 50 and 85
+SELECT SNAME, CCODE FROM Student WHERE MARK BETWEEN 50 AND 85;
+
+-- 8. Display students’ regno and ccode with marks between 85 and 100
+SELECT REGNO, CCODE FROM Student WHERE MARK BETWEEN 85 AND 100;
+
+-- 9. Display total number of students in each department
+SELECT DEPT, COUNT(*) AS Total_Students FROM Student GROUP BY DEPT;
+
+-- 10. Display department name and total number of students
+SELECT DEPT, COUNT(*) AS Total_Students FROM Student GROUP BY DEPT;
+
+-- 11. Display departments with more than 2 students (Using GROUP BY with HAVING)
+SELECT DEPT, COUNT(*) AS Total_Students 
+FROM Student 
+GROUP BY DEPT 
+HAVING COUNT(*) > 2;
+
+-- 12. Display departments with more than 1 student in descending order
+SELECT DEPT, COUNT(*) AS Total_Students 
+FROM Student 
+GROUP BY DEPT 
+HAVING COUNT(*) > 1 
+ORDER BY COUNT(*) DESC;
+
+-- 13. Display departments with ≥2 students in ascending order
+SELECT DEPT, COUNT(*) AS Total_Students 
+FROM Student 
+GROUP BY DEPT 
+HAVING COUNT(*) >= 2 
+ORDER BY COUNT(*) ASC;
+
+-- 14. Increase mark by 5 for students who have taken BCSE303L
+UPDATE Student SET MARK = MARK + 5 WHERE CCODE IN ('BCSE303L');
+
+-- 15. Increase mark by 2 for students except those in BCSE303L
+UPDATE Student SET MARK = MARK + 2 WHERE CCODE NOT IN ('BCSE303L');
+
+-- 16. Delete students who have not opted for any subject (NULL CCODE)
+DELETE FROM Student WHERE CCODE IS NULL;
+
+-- 17. List student register number with the maximum grade
+SELECT REGNO FROM Student WHERE GRADE = (SELECT MAX(GRADE) FROM Student);
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 6 - JOINS
+
+-- Create Student table
+CREATE TABLE Student (
+    RegNo VARCHAR2(10) PRIMARY KEY,
+    Name VARCHAR2(50),
+    Year NUMBER,
+    Dept VARCHAR2(50)
+);
+
+-- Create Course table
+CREATE TABLE Course (
+    CCode VARCHAR2(10) PRIMARY KEY,
+    Cname VARCHAR2(50),
+    RegNo VARCHAR2(10),
+    FOREIGN KEY (RegNo) REFERENCES Student(RegNo)
+);
+
+-- Insert 5 records into Student table
+INSERT INTO Student VALUES ('S101', 'Alice', 2, 'CSE');
+INSERT INTO Student VALUES ('S102', 'Bob', 3, 'ECE');
+INSERT INTO Student VALUES ('S103', 'Charlie', 1, 'IT');
+INSERT INTO Student VALUES ('S104', 'David', 2, 'MECH');
+INSERT INTO Student VALUES ('S105', 'Eve', 3, 'CSE');
+
+-- Insert 5 records into Course table
+INSERT INTO Course VALUES ('C201', 'DBMS', 'S101');
+INSERT INTO Course VALUES ('C202', 'OS', 'S102');
+INSERT INTO Course VALUES ('C203', 'CN', 'S103');
+INSERT INTO Course VALUES ('C204', 'AI', 'S106'); -- No matching student
+INSERT INTO Course VALUES ('C205', 'ML', 'S101');
+
+-- 1. Display RegNo, Name, Cname from the tables
+SELECT Student.RegNo, Student.Name, Course.Cname
+FROM Student JOIN Course ON Student.RegNo = Course.RegNo;
+
+-- 2. Display student name & course name where join condition is met
+SELECT Student.Name, Course.Cname
+FROM Student INNER JOIN Course ON Student.RegNo = Course.RegNo;
+
+-- 3. Display student details where tuples match in both tables & all student records
+SELECT Student.*, Course.Cname 
+FROM Student LEFT JOIN Course ON Student.RegNo = Course.RegNo;
+
+-- 4. Display students' details from Student table where they do not match with Course table
+SELECT * FROM Student 
+WHERE RegNo NOT IN (SELECT RegNo FROM Course);
+
+-- 5. Display student details where tuples match in both tables & all course records
+SELECT Student.*, Course.*
+FROM Student RIGHT JOIN Course ON Student.RegNo = Course.RegNo;
+
+-- 6. Display course details where tuples from Course table do not match with Student table
+SELECT * FROM Course 
+WHERE RegNo NOT IN (SELECT RegNo FROM Student);
+
+-- 7. Display all details from both tables using FULL JOIN
+SELECT * FROM Student FULL OUTER JOIN Course ON Student.RegNo = Course.RegNo;
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERISE 7 - VIEWS, SET OPERATIONS
+
+-- 1. Display CId of customers who have both deposit and loan
+SELECT Cid FROM Deposit 
+INTERSECT 
+SELECT Cid FROM Loan;
+
+-- 2. Display CId of customers who have only deposit
+SELECT Cid FROM Deposit 
+MINUS 
+SELECT Cid FROM Loan;
+
+-- 3. Display CId of customers who have only loan
+SELECT Cid FROM Loan 
+MINUS 
+SELECT Cid FROM Deposit;
+
+-- 4. Display CId and Name of customers who have both deposit and loan
+SELECT C.Cid, C.Name 
+FROM Customer C
+WHERE C.Cid IN (SELECT Cid FROM Deposit INTERSECT SELECT Cid FROM Loan);
+
+-- 5. Display CId and Name of customers who have only deposit
+SELECT C.Cid, C.Name 
+FROM Customer C
+WHERE C.Cid IN (SELECT Cid FROM Deposit MINUS SELECT Cid FROM Loan);
+
+-- 6. Display CId and Name of customers who have only loan
+SELECT C.Cid, C.Name 
+FROM Customer C
+WHERE C.Cid IN (SELECT Cid FROM Loan MINUS SELECT Cid FROM Deposit);
+
+-- 1. Create a view Vname that consists of all customer names and account numbers
+CREATE VIEW Vname AS 
+SELECT Name, Acno FROM Customer;
+
+-- 2. Create a view of customers who have both deposit and loan
+CREATE VIEW View_Deposit_Loan AS 
+SELECT C.Cid, C.Name 
+FROM Customer C
+WHERE C.Cid IN (SELECT Cid FROM Deposit INTERSECT SELECT Cid FROM Loan);
+
+-- 3. Create a view of customers who have only deposit
+CREATE VIEW View_Only_Deposit AS 
+SELECT C.Cid, C.Name 
+FROM Customer C
+WHERE C.Cid IN (SELECT Cid FROM Deposit MINUS SELECT Cid FROM Loan);
+
+-- 4. Create a view of customers who have only loan
+CREATE VIEW View_Only_Loan AS 
+SELECT C.Cid, C.Name 
+FROM Customer C
+WHERE C.Cid IN (SELECT Cid FROM Loan MINUS SELECT Cid FROM Deposit);
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 8 -PL/SQL BASICS
+
+-- Exercise 8: PL/SQL Basic Operations
+
+-- 1. Finding the Greatest of Three Numbers using IF...THEN...ELSE
+DECLARE
+    num1 NUMBER := 45;
+    num2 NUMBER := 78;
+    num3 NUMBER := 32;
+    greatest NUMBER;
+BEGIN
+    IF num1 >= num2 AND num1 >= num3 THEN
+        greatest := num1;
+    ELSIF num2 >= num1 AND num2 >= num3 THEN
+        greatest := num2;
+    ELSE
+        greatest := num3;
+    END IF;
+    DBMS_OUTPUT.PUT_LINE('Greatest Number: ' || greatest);
+END;
+/
+
+-- 2. Bank Wallet Points Based on Purchase Amount
+DECLARE
+    purchase_amount NUMBER := 10000; -- Change for testing
+    points NUMBER;
+BEGIN
+    IF purchase_amount < 0 THEN
+        DBMS_OUTPUT.PUT_LINE('Invalid Inputs');
+    ELSIF purchase_amount = 5000 THEN
+        points := 50;
+    ELSIF purchase_amount = 10000 THEN
+        points := 100;
+    ELSIF purchase_amount = 25000 THEN
+        points := 250;
+    ELSE
+        points := 0;
+    END IF;
+    DBMS_OUTPUT.PUT_LINE('Wallet Points: ' || points);
+END;
+/
+
+-- 3. EB Bill Calculation (Using CASE)
+DECLARE
+    units NUMBER := 350; -- Change for testing
+    total_bill NUMBER := 0;
+BEGIN
+    CASE 
+        WHEN units <= 100 THEN
+            total_bill := units * 1;
+        WHEN units <= 200 THEN
+            total_bill := (100 * 1) + ((units - 100) * 2);
+        WHEN units <= 300 THEN
+            total_bill := (100 * 1) + (100 * 2) + ((units - 200) * 3);
+        ELSE
+            total_bill := (100 * 1) + (100 * 2) + (100 * 3) + ((units - 300) * 5);
+    END CASE;
+    DBMS_OUTPUT.PUT_LINE('Total EB Bill: Rs. ' || total_bill);
+END;
+/
+
+-- 4. Income Tax Calculation
+DECLARE
+    income NUMBER := 850000; -- Change for testing
+    tax NUMBER := 0;
+BEGIN
+    IF income <= 300000 THEN
+        tax := 0;
+    ELSIF income <= 600000 THEN
+        tax := (income - 300000) * 0.05;
+    ELSIF income <= 900000 THEN
+        tax := (300000 * 0.05) + ((income - 600000) * 0.10);
+    ELSIF income <= 1200000 THEN
+        tax := (300000 * 0.05) + (300000 * 0.10) + ((income - 900000) * 0.15);
+    ELSIF income <= 1500000 THEN
+        tax := (300000 * 0.05) + (300000 * 0.10) + (300000 * 0.15) + ((income - 1200000) * 0.20);
+    ELSE
+        tax := (300000 * 0.05) + (300000 * 0.10) + (300000 * 0.15) + (300000 * 0.20) + ((income - 1500000) * 0.30);
+    END IF;
+    DBMS_OUTPUT.PUT_LINE('Income Tax: Rs. ' || tax);
+END;
+/
+
+-- 5. Find Numbers Divisible by 3 Between 1 and 100 & Their Sum
+DECLARE
+    i NUMBER;
+    sum NUMBER := 0;
+BEGIN
+    FOR i IN 1..100 LOOP
+        IF MOD(i, 3) = 0 THEN
+            sum := sum + i;
+        END IF;
+    END LOOP;
+    DBMS_OUTPUT.PUT_LINE('Sum of numbers divisible by 3 (1 to 100): ' || sum);
+END;
+/
+
+-- 6. Sum of Armstrong Numbers Between 1 and 100
+DECLARE
+    num NUMBER;
+    digit NUMBER;
+    sum NUMBER;
+    total_sum NUMBER := 0;
+BEGIN
+    FOR num IN 1..100 LOOP
+        sum := 0;
+        DECLARE
+            temp NUMBER := num;
+        BEGIN
+            WHILE temp > 0 LOOP
+                digit := MOD(temp, 10);
+                sum := sum + (digit * digit * digit);
+                temp := TRUNC(temp / 10);
+            END LOOP;
+        END;
+        IF sum = num THEN
+            total_sum := total_sum + num;
+        END IF;
+    END LOOP;
+    DBMS_OUTPUT.PUT_LINE('Sum of Armstrong numbers between 1 and 100: ' || total_sum);
+END;
+/
+
+-- 7. Fibonacci Series Using FOR Loop
+DECLARE
+    n1 NUMBER := 0;
+    n2 NUMBER := 1;
+    next NUMBER;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Fibonacci Series:');
+    DBMS_OUTPUT.PUT_LINE(n1);
+    DBMS_OUTPUT.PUT_LINE(n2);
+
+    FOR i IN 3..10 LOOP  -- Change '10' to desired Fibonacci series length
+        next := n1 + n2;
+        DBMS_OUTPUT.PUT_LINE(next);
+        n1 := n2;
+        n2 := next;
+    END LOOP;
+END;
+/
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 9 - PROCEDURES AND FUNCTIONS
+
+-- Exercise 9: PL/SQL Procedures and Functions
+
+-- 1. Creating Employee Table
+CREATE TABLE Employee (
+    Ename VARCHAR2(50),
+    Eid NUMBER PRIMARY KEY,
+    Designation VARCHAR2(50),
+    BasicPay NUMBER,
+    HRA NUMBER,
+    DA NUMBER,
+    GrossPay NUMBER
+);
+/
+
+-- 2. PL/SQL Procedure to Insert Records into Employee Table (Except GrossPay)
+CREATE OR REPLACE PROCEDURE InsertEmployee (
+    p_Ename VARCHAR2,
+    p_Eid NUMBER,
+    p_Designation VARCHAR2,
+    p_BasicPay NUMBER,
+    p_HRA NUMBER,
+    p_DA NUMBER
+) AS 
+BEGIN
+    INSERT INTO Employee (Ename, Eid, Designation, BasicPay, HRA, DA)
+    VALUES (p_Ename, p_Eid, p_Designation, p_BasicPay, p_HRA, p_DA);
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Employee Record Inserted');
+END;
+/
+-- Example Execution:
+-- EXEC InsertEmployee('John Doe', 101, 'Manager', 50000, 10000, 8000);
+
+-- 3. PL/SQL Procedure to Update GrossPay in Employee Table
+CREATE OR REPLACE PROCEDURE UpdateGrossPay AS
+BEGIN
+    UPDATE Employee 
+    SET GrossPay = BasicPay + HRA + DA;
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('GrossPay Updated for All Employees');
+END;
+/
+-- Example Execution:
+-- EXEC UpdateGrossPay;
+
+-- 4. PL/SQL Procedure to Delete Employees Working as "Clerk"
+CREATE OR REPLACE PROCEDURE ProcDel AS
+BEGIN
+    DELETE FROM Employee WHERE Designation = 'Clerk';
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Clerks Deleted from Employee Table');
+END;
+/
+-- Example Execution:
+-- EXEC ProcDel;
+
+-- 5. Removing the Procedure ProcDel
+DROP PROCEDURE ProcDel;
+/
+
+-- 6. PL/SQL Function to Find the Smallest of Three Numbers
+CREATE OR REPLACE FUNCTION FunSmall (
+    num1 NUMBER, num2 NUMBER, num3 NUMBER
+) RETURN NUMBER AS
+    smallest NUMBER;
+BEGIN
+    smallest := LEAST(num1, num2, num3);
+    RETURN smallest;
+END;
+/
+-- Example Execution:
+-- SELECT FunSmall(12, 7, 20) FROM dual;
+
+-- 7. PL/SQL Function to Compute Grade Based on Marks
+CREATE OR REPLACE FUNCTION ComputeGrade (
+    mark NUMBER
+) RETURN VARCHAR2 AS
+    grade VARCHAR2(10);
+BEGIN
+    CASE 
+        WHEN mark BETWEEN 91 AND 100 THEN grade := 'S';
+        WHEN mark BETWEEN 81 AND 90 THEN grade := 'A';
+        WHEN mark BETWEEN 71 AND 80 THEN grade := 'B';
+        WHEN mark BETWEEN 61 AND 70 THEN grade := 'C';
+        WHEN mark BETWEEN 55 AND 60 THEN grade := 'D';
+        WHEN mark BETWEEN 50 AND 54 THEN grade := 'E';
+        ELSE grade := 'Fail';
+    END CASE;
+    RETURN grade;
+END;
+/
+-- Example Execution:
+-- SELECT ComputeGrade(85) FROM dual;
+
+-- 8. PL/SQL Function to Check if a Number is an Armstrong Number
+CREATE OR REPLACE FUNCTION IsArmstrong (
+    num NUMBER
+) RETURN VARCHAR2 AS
+    digit NUMBER;
+    sum NUMBER := 0;
+    temp NUMBER := num;
+BEGIN
+    WHILE temp > 0 LOOP
+        digit := MOD(temp, 10);
+        sum := sum + POWER(digit, 3);
+        temp := TRUNC(temp / 10);
+    END LOOP;
+    
+    IF sum = num THEN
+        RETURN 'Yes, Armstrong Number';
+    ELSE
+        RETURN 'No, Not an Armstrong Number';
+    END IF;
+END;
+/
+-- Example Execution:
+-- SELECT IsArmstrong(153) FROM dual;
+
+-- 9. Removing the Function FunSmall
+DROP FUNCTION FunSmall;
+/
+
+-- 10. PL/SQL Function to Check if a Number is Prime
+CREATE OR REPLACE FUNCTION IsPrime (
+    num NUMBER
+) RETURN VARCHAR2 AS
+    i NUMBER;
+BEGIN
+    IF num < 2 THEN
+        RETURN 'Not a Prime Number';
+    END IF;
+    
+    FOR i IN 2..SQRT(num) LOOP
+        IF MOD(num, i) = 0 THEN
+            RETURN 'Not a Prime Number';
+        END IF;
+    END LOOP;
+    
+    RETURN 'Yes, Prime Number';
+END;
+/
+-- Example Execution:
+-- SELECT IsPrime(29) FROM dual;
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 10 - TRIGGERS
+
+-- Exercise 10: PL/SQL Triggers
+
+-- 1. Creating Employee Table
+CREATE TABLE Employee (
+    name VARCHAR2(50),
+    eid NUMBER PRIMARY KEY,
+    dept VARCHAR2(50),
+    designation VARCHAR2(50),
+    BP NUMBER,
+    HRA NUMBER,
+    DA NUMBER,
+    Salary NUMBER
+);
+/
+-- Insert Sample Records
+INSERT INTO Employee VALUES ('Alice', 101, 'HR', 'Manager', 50000, 10000, 8000, 68000);
+INSERT INTO Employee VALUES ('Bob', 102, 'IT', 'Developer', 40000, 8000, 6000, 54000);
+COMMIT;
+/
+
+-- 1a. PL/SQL Trigger to Display Employee Details on DML Operations
+CREATE OR REPLACE TRIGGER Employee_DML_Trigger
+AFTER INSERT OR UPDATE OR DELETE ON Employee
+FOR EACH ROW
+BEGIN
+    IF INSERTING THEN
+        DBMS_OUTPUT.PUT_LINE('Inserted Employee: ' || :NEW.name || ' (ID: ' || :NEW.eid || ')');
+    ELSIF UPDATING THEN
+        DBMS_OUTPUT.PUT_LINE('Updated Employee: ' || :OLD.name || ' (ID: ' || :OLD.eid || ')');
+    ELSIF DELETING THEN
+        DBMS_OUTPUT.PUT_LINE('Deleted Employee: ' || :OLD.name || ' (ID: ' || :OLD.eid || ')');
+    END IF;
+END;
+/
+-- Example Execution:
+-- INSERT INTO Employee VALUES ('Charlie', 103, 'Finance', 'Analyst', 55000, 9000, 7000, 71000);
+-- UPDATE Employee SET Salary = 60000 WHERE eid = 101;
+-- DELETE FROM Employee WHERE eid = 102;
+
+--------------------------------------------------------------
+
+-- 2. Creating Stock Table
+CREATE TABLE Stock (
+    ProductId NUMBER PRIMARY KEY,
+    Pname VARCHAR2(50),
+    Price NUMBER
+);
+/
+-- Insert Sample Records
+INSERT INTO Stock VALUES (1, 'Laptop', 50000);
+INSERT INTO Stock VALUES (2, 'Mouse', 500);
+COMMIT;
+/
+
+-- 2a. BEFORE UPDATE Trigger to Ensure Product Price is Not ≤ 0
+CREATE OR REPLACE TRIGGER Stock_Price_Check
+BEFORE UPDATE ON Stock
+FOR EACH ROW
+BEGIN
+    IF :NEW.Price <= 0 THEN
+        DBMS_OUTPUT.PUT_LINE('Invalid Price! Setting default value of 5.');
+        :NEW.Price := 5;
+    END IF;
+END;
+/
+-- Example Execution:
+-- UPDATE Stock SET Price = -10 WHERE ProductId = 1;  -- Will set Price to 5
+
+--------------------------------------------------------------
+
+-- 3. Creating Employees Table
+CREATE TABLE Employees (
+    Eid NUMBER PRIMARY KEY,
+    name VARCHAR2(50),
+    salary NUMBER
+);
+/
+
+-- Creating SalaryHistory Table
+CREATE TABLE SalaryHistory (
+    hid NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    eid NUMBER,
+    oldSalary NUMBER,
+    newSalary NUMBER,
+    changedate DATE DEFAULT SYSDATE,
+    CONSTRAINT fk_emp FOREIGN KEY (eid) REFERENCES Employees (Eid)
+);
+/
+
+-- Insert Sample Records
+INSERT INTO Employees VALUES (201, 'David', 50000);
+INSERT INTO Employees VALUES (202, 'Emma', 60000);
+COMMIT;
+/
+
+-- 3a. AFTER UPDATE Trigger to Log Salary Changes in SalaryHistory Table
+CREATE OR REPLACE TRIGGER log_salary_change
+AFTER UPDATE OF salary ON Employees
+FOR EACH ROW
+BEGIN
+    INSERT INTO SalaryHistory (eid, oldSalary, newSalary, changedate)
+    VALUES (:OLD.eid, :OLD.salary, :NEW.salary, SYSDATE);
+    DBMS_OUTPUT.PUT_LINE('Salary Change Logged for Employee ID: ' || :OLD.eid);
+END;
+/
+-- Example Execution:
+-- UPDATE Employees SET salary = 55000 WHERE Eid = 201;
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+EXERCISE 11 - CURSORS
+
+-- Exercise 11: PL/SQL Cursor
+
+-- 1. Creating Student Table
+CREATE TABLE Student (
+    name VARCHAR2(50),
+    regno VARCHAR2(10) PRIMARY KEY,
+    dept VARCHAR2(50),
+    year NUMBER,
+    Mark1 NUMBER,
+    Mark2 NUMBER,
+    Mark3 NUMBER,
+    Total NUMBER,
+    Average NUMBER
+);
+/
+
+-- 1. Creating Employee Table
+CREATE TABLE Employee (
+    Eid NUMBER PRIMARY KEY,
+    Name VARCHAR2(50),
+    Phone VARCHAR2(15),
+    Email VARCHAR2(50),
+    Salary NUMBER
+);
+/
+
+-- 2. Implicit Cursor Operations
+
+-- (a) Select students who belong to the CSE department
+DECLARE
+    v_name Student.name%TYPE;
+    v_regno Student.regno%TYPE;
+    v_dept Student.dept%TYPE;
+BEGIN
+    FOR student_rec IN (SELECT name, regno, dept FROM Student WHERE dept = 'CSE') LOOP
+        DBMS_OUTPUT.PUT_LINE('CSE Student: ' || student_rec.name || ' (' || student_rec.regno || ')');
+    END LOOP;
+END;
+/
+-- (b) Insert Records into Student Table
+INSERT INTO Student VALUES ('Alice', '23CSE001', 'CSE', 2, 85, 90, 80, NULL, NULL);
+INSERT INTO Student VALUES ('Bob', '23ECE002', 'ECE', 3, 70, 75, 65, NULL, NULL);
+INSERT INTO Student VALUES ('Charlie', '23CIV003', 'CIVIL', 1, 60, 55, 50, NULL, NULL);
+COMMIT;
+/
+
+-- (c) Select students who belong to the ECE department
+DECLARE
+    CURSOR ece_cursor IS SELECT name, regno FROM Student WHERE dept = 'ECE';
+BEGIN
+    FOR student_rec IN ece_cursor LOOP
+        DBMS_OUTPUT.PUT_LINE('ECE Student: ' || student_rec.name || ' (' || student_rec.regno || ')');
+    END LOOP;
+END;
+/
+-- (d) Update Total and Average
+UPDATE Student
+SET Total = Mark1 + Mark2 + Mark3,
+    Average = (Mark1 + Mark2 + Mark3) / 3;
+COMMIT;
+/
+
+-- (e) Delete students belonging to the CIVIL department
+DELETE FROM Student WHERE dept = 'CIVIL';
+COMMIT;
+/
+
+-- (f) Display all the records using a cursor
+DECLARE
+    CURSOR student_cursor IS SELECT * FROM Student;
+BEGIN
+    FOR student_rec IN student_cursor LOOP
+        DBMS_OUTPUT.PUT_LINE('Student: ' || student_rec.name || ' | RegNo: ' || student_rec.regno || ' | Dept: ' || student_rec.dept);
+    END LOOP;
+END;
+/
+-- (g) Display students with an average greater than 70
+DECLARE
+    CURSOR high_avg_cursor IS SELECT name, regno, Average FROM Student WHERE Average > 70;
+BEGIN
+    FOR student_rec IN high_avg_cursor LOOP
+        DBMS_OUTPUT.PUT_LINE('High Scorer: ' || student_rec.name || ' | Avg: ' || student_rec.Average);
+    END LOOP;
+END;
+/
+
+-- 3. Explicit Cursor
+
+-- (a) Use an Explicit Cursor to Fetch Employee Details Based on Salary Range
+DECLARE
+    v_min_salary NUMBER := 20000;
+    v_max_salary NUMBER := 80000;
+    v_found BOOLEAN := FALSE;
+    
+    CURSOR emp_cursor IS
+    SELECT Eid, Name, Salary FROM Employee WHERE Salary BETWEEN v_min_salary AND v_max_salary;
+    
+    v_emp Employee%ROWTYPE;
+BEGIN
+    OPEN emp_cursor;
+    LOOP
+        FETCH emp_cursor INTO v_emp.Eid, v_emp.Name, v_emp.Salary;
+        EXIT WHEN emp_cursor%NOTFOUND;
+        v_found := TRUE;
+        DBMS_OUTPUT.PUT_LINE('Employee ID: ' || v_emp.Eid || ' | Name: ' || v_emp.Name || ' | Salary: ' || v_emp.Salary);
+    END LOOP;
+    CLOSE emp_cursor;
+
+    IF v_found = FALSE THEN
+        DBMS_OUTPUT.PUT_LINE('No employees found in the given salary range.');
+    END IF;
+END;
+/
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
